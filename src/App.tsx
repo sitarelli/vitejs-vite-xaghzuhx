@@ -450,15 +450,14 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
     const cells=DAYS.map((day,di)=>{
       const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
       const cv=constraints?.[person]?.[di];
-      const tdBase=`background:${bg};text-align:center;vertical-align:top;padding:5px 2px;border:1px solid #CBD5E1;width:${colW}px;`;
+      const tdBase=`background:${bg};text-align:center;vertical-align:middle;padding:5px 2px;border:1px solid #CBD5E1;width:${colW}px;`;
       if(cv==="abs") return `<td style="${tdBase}background:#FEE2E2;"><span style="color:#EF4444;font-size:9px;font-weight:700;">assente</span></td>`;
       if(!shifts.length) return `<td style="${tdBase}"><span style="color:#CBD5E1;font-size:11px;">—</span></td>`;
       const badges=shifts.map(shift=>{
         const isCassa=isCassaCell(person,day,shift);
         const c=isCassa?{bg:"#E2E8F0",fg:"#475569",border:"#94A3B8"}:(shiftColors[shift]||{bg:"#F1F5F9",fg:"#334155",border:"#94A3B8"});
         const lbl=label(person,day,shift);
-        const lblWrapped=lbl.replace(/–|-/g,"‑<wbr/>").replace(/\s+/g,"<br/>");
-        return `<table style="display:inline-table;background:${c.bg};border:1px solid ${c.border};border-radius:5px;margin:2px auto;width:${colW-12}px;min-height:32px;"><tbody><tr><td style="color:${c.fg};font-size:9px;font-weight:700;text-align:center;vertical-align:middle;padding:4px 4px;line-height:1.35;word-break:break-word;">${lblWrapped}</td></tr></tbody></table>`;
+        return `<div style="display:flex;align-items:center;justify-content:center;background:${c.bg};border:1px solid ${c.border};border-radius:5px;margin:2px auto;width:${colW-12}px;min-height:28px;padding:3px 4px;box-sizing:border-box;"><span style="color:${c.fg};font-size:9px;font-weight:700;text-align:center;line-height:1.3;word-break:break-word;font-family:'Segoe UI',Arial,sans-serif;">${lbl}</span></div>`;
       }).join("");
       return `<td style="${tdBase}">${badges}</td>`;
     }).join("");
