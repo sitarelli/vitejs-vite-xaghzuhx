@@ -329,22 +329,124 @@ function getMonday(date){
 }
 function formatDate(d){ return d.toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 
-function exportCSV(turni,weekStart){
-  const rows=[["",...DAYS]];
-  STAFF.forEach(person=>{
-    ["Mattina","Pomeriggio","PS","Turno Unico"].forEach(shift=>{
-      if(!DAYS.some(day=>(turni[day]?.[shift]||[]).includes(person))) return;
-      rows.push([`${person} - ${shift}`,...DAYS.map(day=>(turni[day]?.[shift]||[]).includes(person)?"✓":"")]);
-    });
-  });
+function exportXLS(turni,weekStart,showOre,constraints){
+  const label=(p,day,shift)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
+  const shiftColors={
+    Mattina:     {bg:"#FEF9C3",fg:"#78350F"},
+    Pomeriggio:  {bg:"#DBEAFE",fg:"#1E3A8A"},
+    PS:          {bg:"#EDE9FE",fg:"#4C1D95"},
+    "Turno Unico":{bg:"#DCFCE7",fg:"#14532D"},
+  };
+  const hdStyle=`background:#4F46E5;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:6px;border:1px solid #3730A3;`;
+  const hdStyleL=`background:#4F46E5;color:white;font-weight:bold;font-size:11pt;text-align:left;padding:6px;border:1px solid #3730A3;`;
+  const headers=DAYS.map((d,i)=>`<th style="${hdStyle}">${d} ${new Date(new Date(weekStart).setDate(new Date(weekStart).getDate()+i)).getDate()}</th>`).join("");
+  const rows=STAFF.map((person,pi)=>{
+    const bg=pi%2===0?"#FFFFFF":"#F9FAFB";
+    const cells=DAYS.map((day,di)=>{
+      const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
+      const cv=constraints?.[person]?.[di];
+      if(cv==="abs") return `<td style="background:#FEE2E2;color:#EF4444;text-align:center;font-size:9pt;border:1px solid #E5E7EB;">assente</td>`;
+      if(!shifts.length) return `<td style="background:${bg};color:#D1D5DB;text-align:center;border:1px solid #E5E7EB;">—</td>`;
+      const content=shifts.map(shift=>{
+        const isCassa=isCassaCell(person,day,shift);
+        const c=isCassa?{bg:"#E5E7EB",fg:"#4B5563"}:(shiftColors[shift]||{bg:"#F3F4F6",fg:"#374151"});
+        return `<div style="display:inline-block;background:${c.bg};color:${c.fg};font-size:8pt;font-weight:bold;padding:2px 6px;border-radius:3px;margin:1px;">${label(person,day,shift)}</div>`;
+      }).join("");
+      return `<td style="background:${bg};text-align:center;vertical-align:middle;padding:4px;border:1px solid #E5E7EB;">${content}</td>`;
+    }).join("");
+    return `<tr><td style="background:${bg};font-weight:bold;color:#1F2937;padding:6px 10px;border:1px solid #E5E7EB;white-space:nowrap;">${person}</td>${cells}</tr>`;
+  }).join("");
+  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"/><style>table{border-collapse:collapse;font-family:Calibri,sans-serif;}</style></head>
+<body><table>
+<thead><tr><th style="${hdStyleL}">Personale</th>${headers}<th style="${hdStyle}">Tot</th></tr></thead>
+<tbody>${rows}</tbody>
+</table></body></html>`;
+  const blob=new Blob(["\uFEFF"+html],{type:"application/vnd.ms-excel;charset=utf-8"});
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n")],{type:"text/csv;charset=utf-8;"}));
-  a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.csv`; a.click();
+  a.href=URL.createObjectURL(blob);
+  a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.xls`; a.click();
 }
 function exportJSON(turni,weekStart){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([JSON.stringify({weekStart:formatDate(weekStart),turni},null,2)],{type:"application/json"}));
   a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.json`; a.click();
+}
+
+function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,forCanvas=false){
+  const label=(p,day,shift)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
+  const fs=forCanvas?13:11;
+  const shiftColors={
+    Mattina:      {bg:"#FEF3C7",fg:"#92400E"},
+    Pomeriggio:   {bg:"#DBEAFE",fg:"#1E40AF"},
+    PS:           {bg:"#EDE9FE",fg:"#5B21B6"},
+    "Turno Unico":{bg:"#DCFCE7",fg:"#166534"},
+  };
+  const headers=DAYS.map((d,i)=>`<th style="padding:10px 6px;text-align:center;font-weight:700;color:white;font-size:${fs}px;letter-spacing:.3px;">${d}<br/><span style="font-size:${fs-2}px;font-weight:400;opacity:.75;">${colDates[i]}</span></th>`).join("");
+  const rows=STAFF.map((person,pi)=>{
+    const bg=pi%2===0?"#FFFFFF":"#F8FAFC";
+    const cells=DAYS.map((day,di)=>{
+      const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
+      const cv=constraints?.[person]?.[di];
+      if(cv==="abs") return `<td style="background:#FEE2E2;color:#EF4444;text-align:center;font-size:${fs-2}px;padding:8px 4px;border:1px solid #E2E8F0;">assente</td>`;
+      if(!shifts.length) return `<td style="background:${bg};color:#CBD5E1;text-align:center;padding:8px 4px;border:1px solid #E2E8F0;font-size:${fs}px;">—</td>`;
+      const badges=shifts.map(shift=>{
+        const isCassa=isCassaCell(person,day,shift);
+        const c=isCassa?{bg:"#E2E8F0",fg:"#475569"}:(shiftColors[shift]||{bg:"#F1F5F9",fg:"#334155"});
+        return `<span style="display:inline-block;background:${c.bg};color:${c.fg};font-size:${fs-2}px;font-weight:700;padding:3px 7px;border-radius:5px;margin:2px;white-space:nowrap;">${label(person,day,shift)}</span>`;
+      }).join("");
+      return `<td style="background:${bg};text-align:center;vertical-align:middle;padding:6px 4px;border:1px solid #E2E8F0;">${badges}</td>`;
+    }).join("");
+    const tot=DAYS.reduce((acc,day)=>{
+      const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
+      if(!shifts.length) return acc;
+      if(shifts.includes("Turno Unico")) return acc+1;
+      const hasAny=shifts.some(s=>["Mattina","PS","Pomeriggio"].includes(s));
+      return hasAny?acc+1:acc;
+    },0);
+    return `<tr><td style="background:${bg};font-weight:700;color:#1E293B;padding:8px 14px;border:1px solid #E2E8F0;white-space:nowrap;font-size:${fs}px;">${person}</td>${cells}<td style="background:${bg};text-align:center;padding:8px 6px;border:1px solid #E2E8F0;"><span style="background:#EEF2FF;color:#4338CA;font-weight:700;padding:2px 8px;border-radius:12px;font-size:${fs-1}px;">${tot}</span></td></tr>`;
+  }).join("");
+  return `<table style="width:100%;border-collapse:collapse;font-family:'Segoe UI',Arial,sans-serif;">
+<thead><tr style="background:#4F46E5;">
+  <th style="padding:10px 14px;text-align:left;font-weight:700;color:white;font-size:${fs}px;">Personale</th>
+  ${headers}
+  <th style="padding:10px 6px;text-align:center;font-weight:700;color:white;font-size:${fs}px;">Tot</th>
+</tr></thead>
+<tbody>${rows}</tbody></table>`;
+}
+
+async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints){
+  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,true);
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#fff;padding:24px;font-family:'Segoe UI',Arial,sans-serif;}</style>
+  </head><body>${tableHTML}</body></html>`;
+  // Usa html2canvas via CDN caricato dinamicamente
+  if(!window._h2c){
+    await new Promise((res,rej)=>{
+      const s=document.createElement("script");
+      s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
+    window._h2c=true;
+  }
+  // Crea iframe nascosto per renderizzare la tabella
+  const iframe=document.createElement("iframe");
+  iframe.style.cssText="position:fixed;left:-9999px;top:0;width:1200px;height:800px;border:none;";
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  await new Promise(r=>setTimeout(r,300));
+  const body=iframe.contentDocument.body;
+  const canvas=await window.html2canvas(body,{
+    scale:2,backgroundColor:"#ffffff",useCORS:true,
+    width:body.scrollWidth+48, height:body.scrollHeight+48,
+    windowWidth:body.scrollWidth+48,
+  });
+  document.body.removeChild(iframe);
+  const a=document.createElement("a");
+  a.href=canvas.toDataURL("image/jpeg",0.95);
+  a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.jpg`; a.click();
 }
 
 const SS={
@@ -378,7 +480,7 @@ export default function App(){
   const [sabScelto,setSabScelto]=useState("auto");
   const [constraints,setConstraints]=useState({});
   const [showConstraints,setShowConstraints]=useState(false);
-  const [showOre,setShowOre]=useState(false);
+  const [showOre,setShowOre]=useState(true);
   const [dirty,setDirty]=useState(false);
 
   const baseMonday=getMonday(new Date());
@@ -514,17 +616,18 @@ export default function App(){
 
           <div className="flex flex-wrap gap-2">
             <button onClick={handleGenerate} disabled={computing}
-              className={`px-4 py-2 rounded-lg text-sm font-medium shadow-sm text-white ${computing?"bg-indigo-400 cursor-wait":"bg-indigo-600 hover:bg-indigo-700"}`}>
-              {computing?"⏳ Ottimizzazione…":"✨ Elabora Turni"}
+              className={`px-4 py-2 rounded-lg text-sm font-medium shadow-sm text-white ${computing?"bg-indigo-400 cursor-wait":dirty?"bg-orange-500 hover:bg-orange-600":"bg-indigo-600 hover:bg-indigo-700"}`}>
+              {computing?"⏳ Ottimizzazione…":dirty?"⚠️ Rielabora Turni":"✨ Elabora Turni"}
             </button>
             <button onClick={()=>setShowOre(v=>!v)}
               className={`px-4 py-2 rounded-lg text-sm font-medium border shadow-sm transition-all ${showOre?"bg-indigo-50 border-indigo-400 text-indigo-700":"bg-white border-gray-200 text-gray-600 hover:border-indigo-300"}`}>
               🕐 {showOre?"Mostra sigle":"Mostra orari"}
             </button>
             {turni && <>
-              <button onClick={()=>exportCSV(turni,weekStart)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ CSV</button>
+              <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLS</button>
               <button onClick={()=>exportJSON(turni,weekStart)} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium shadow-sm">⬇ JSON</button>
-              <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 Stampa PDF</button>
+              <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 PDF</button>
+              <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
             </>}
             <label className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium cursor-pointer shadow-sm">
               📂 Importa JSON<input type="file" accept=".json" className="hidden" onChange={handleImport}/>
