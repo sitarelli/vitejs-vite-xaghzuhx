@@ -373,54 +373,86 @@ function exportJSON(turni,weekStart){
   a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.json`; a.click();
 }
 
-function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,forCanvas=false){
+function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
   const label=(p,day,shift)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
-  const fs=forCanvas?13:11;
   const shiftColors={
-    Mattina:      {bg:"#FEF3C7",fg:"#92400E"},
-    Pomeriggio:   {bg:"#DBEAFE",fg:"#1E40AF"},
-    PS:           {bg:"#EDE9FE",fg:"#5B21B6"},
-    "Turno Unico":{bg:"#DCFCE7",fg:"#166534"},
+    Mattina:      {bg:"#FEF3C7",fg:"#92400E",border:"#F59E0B"},
+    Pomeriggio:   {bg:"#DBEAFE",fg:"#1E40AF",border:"#60A5FA"},
+    PS:           {bg:"#EDE9FE",fg:"#5B21B6",border:"#A78BFA"},
+    "Turno Unico":{bg:"#DCFCE7",fg:"#166534",border:"#4ADE80"},
   };
-  const headers=DAYS.map((d,i)=>`<th style="padding:10px 6px;text-align:center;font-weight:700;color:white;font-size:${fs}px;letter-spacing:.3px;">${d}<br/><span style="font-size:${fs-2}px;font-weight:400;opacity:.75;">${colDates[i]}</span></th>`).join("");
+  // A4 portrait: 794px wide, colonne strette, testo a capo
+  const colW=82; // px per ogni giorno
+  const nameW=90;
+  const totW=36;
+  const totalW=nameW + colW*6 + totW; // 794px circa
+
+  const thBase=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;`;
+  const headers=DAYS.map((d,i)=>`<th style="${thBase}width:${colW}px;">${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span></th>`).join("");
+
   const rows=STAFF.map((person,pi)=>{
-    const bg=pi%2===0?"#FFFFFF":"#F8FAFC";
+    const bg=pi%2===0?"#FFFFFF":"#F1F5F9";
     const cells=DAYS.map((day,di)=>{
       const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
       const cv=constraints?.[person]?.[di];
-      if(cv==="abs") return `<td style="background:#FEE2E2;color:#EF4444;text-align:center;font-size:${fs-2}px;padding:8px 4px;border:1px solid #E2E8F0;">assente</td>`;
-      if(!shifts.length) return `<td style="background:${bg};color:#CBD5E1;text-align:center;padding:8px 4px;border:1px solid #E2E8F0;font-size:${fs}px;">—</td>`;
+      const tdBase=`background:${bg};text-align:center;vertical-align:middle;padding:5px 2px;border:1px solid #CBD5E1;width:${colW}px;`;
+      if(cv==="abs") return `<td style="${tdBase}background:#FEE2E2;"><span style="color:#EF4444;font-size:9px;font-weight:700;">assente</span></td>`;
+      if(!shifts.length) return `<td style="${tdBase}"><span style="color:#CBD5E1;font-size:11px;">—</span></td>`;
       const badges=shifts.map(shift=>{
         const isCassa=isCassaCell(person,day,shift);
-        const c=isCassa?{bg:"#E2E8F0",fg:"#475569"}:(shiftColors[shift]||{bg:"#F1F5F9",fg:"#334155"});
-        return `<span style="display:inline-block;background:${c.bg};color:${c.fg};font-size:${fs-2}px;font-weight:700;padding:3px 7px;border-radius:5px;margin:2px;white-space:nowrap;">${label(person,day,shift)}</span>`;
+        const c=isCassa?{bg:"#E2E8F0",fg:"#475569",border:"#94A3B8"}:(shiftColors[shift]||{bg:"#F1F5F9",fg:"#334155",border:"#94A3B8"});
+        const lbl=label(person,day,shift);
+        // Forza il testo a capo dopo il trattino/spazio per ridurre larghezza badge
+        const lblWrapped=lbl.replace(/–|-/g,"‑<wbr/>").replace(/\s+/g,"<br/>");
+        return `<div style="display:inline-block;background:${c.bg};color:${c.fg};border:1px solid ${c.border};font-size:9px;font-weight:700;padding:3px 5px;border-radius:5px;margin:2px auto;line-height:1.3;text-align:center;max-width:${colW-10}px;word-break:break-word;">${lblWrapped}</div>`;
       }).join("");
-      return `<td style="background:${bg};text-align:center;vertical-align:middle;padding:6px 4px;border:1px solid #E2E8F0;">${badges}</td>`;
+      return `<td style="${tdBase}">${badges}</td>`;
     }).join("");
+
     const tot=DAYS.reduce((acc,day)=>{
-      const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
-      if(!shifts.length) return acc;
-      if(shifts.includes("Turno Unico")) return acc+1;
-      const hasAny=shifts.some(s=>["Mattina","PS","Pomeriggio"].includes(s));
-      return hasAny?acc+1:acc;
+      const sh=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
+      if(!sh.length) return acc;
+      if(sh.includes("Turno Unico")) return acc+1;
+      return sh.some(s=>["Mattina","PS","Pomeriggio"].includes(s))?acc+1:acc;
     },0);
-    return `<tr><td style="background:${bg};font-weight:700;color:#1E293B;padding:8px 14px;border:1px solid #E2E8F0;white-space:nowrap;font-size:${fs}px;">${person}</td>${cells}<td style="background:${bg};text-align:center;padding:8px 6px;border:1px solid #E2E8F0;"><span style="background:#EEF2FF;color:#4338CA;font-weight:700;padding:2px 8px;border-radius:12px;font-size:${fs-1}px;">${tot}</span></td></tr>`;
+
+    return `<tr>
+      <td style="background:${bg};font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#1E293B;padding:6px 8px;border:1px solid #CBD5E1;width:${nameW}px;font-size:11px;white-space:nowrap;">${person}</td>
+      ${cells}
+      <td style="background:${bg};text-align:center;padding:6px 3px;border:1px solid #CBD5E1;width:${totW}px;">
+        <span style="background:#EEF2FF;color:#4338CA;font-weight:700;padding:2px 5px;border-radius:10px;font-size:10px;font-family:'Segoe UI',Arial,sans-serif;">${tot}</span>
+      </td>
+    </tr>`;
   }).join("");
-  return `<table style="width:100%;border-collapse:collapse;font-family:'Segoe UI',Arial,sans-serif;">
-<thead><tr style="background:#4F46E5;">
-  <th style="padding:10px 14px;text-align:left;font-weight:700;color:white;font-size:${fs}px;">Personale</th>
-  ${headers}
-  <th style="padding:10px 6px;text-align:center;font-weight:700;color:white;font-size:${fs}px;">Tot</th>
-</tr></thead>
-<tbody>${rows}</tbody></table>`;
+
+  const hdrNameStyle=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:left;padding:8px;border:1px solid #3730A3;background:#4F46E5;width:${nameW}px;`;
+  const hdrTotStyle=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:10px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;width:${totW}px;`;
+
+  return `<div style="width:${totalW}px;margin:0 auto;">
+  <div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Turni Ambulatorio</span>
+    <span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span>
+  </div>
+  <table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;">
+    <thead><tr>
+      <th style="${hdrNameStyle}">Personale</th>
+      ${headers}
+      <th style="${hdrTotStyle}">Tot</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  </div>`;
 }
 
 async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints){
-  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,true);
+  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints);
+  // Larghezza canvas = A4 portrait ~794px + padding
+  const canvasW=842;
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/>
-  <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#fff;padding:24px;font-family:'Segoe UI',Arial,sans-serif;}</style>
-  </head><body>${tableHTML}</body></html>`;
-  // Usa html2canvas via CDN caricato dinamicamente
+  <style>*{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#F8FAFC;padding:24px;width:${canvasW}px;font-family:'Segoe UI',Arial,sans-serif;}
+  </style></head><body>${tableHTML}</body></html>`;
+
   if(!window._h2c){
     await new Promise((res,rej)=>{
       const s=document.createElement("script");
@@ -429,24 +461,27 @@ async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints){
     });
     window._h2c=true;
   }
-  // Crea iframe nascosto per renderizzare la tabella
   const iframe=document.createElement("iframe");
-  iframe.style.cssText="position:fixed;left:-9999px;top:0;width:1200px;height:800px;border:none;";
+  iframe.style.cssText=`position:fixed;left:-9999px;top:0;width:${canvasW}px;height:1200px;border:none;`;
   document.body.appendChild(iframe);
   iframe.contentDocument.open();
   iframe.contentDocument.write(html);
   iframe.contentDocument.close();
-  await new Promise(r=>setTimeout(r,300));
+  await new Promise(r=>setTimeout(r,400));
   const body=iframe.contentDocument.body;
   const canvas=await window.html2canvas(body,{
-    scale:2,backgroundColor:"#ffffff",useCORS:true,
-    width:body.scrollWidth+48, height:body.scrollHeight+48,
-    windowWidth:body.scrollWidth+48,
+    scale:2.5,
+    backgroundColor:"#F8FAFC",
+    useCORS:true,
+    width:canvasW,
+    height:body.scrollHeight+48,
+    windowWidth:canvasW,
   });
   document.body.removeChild(iframe);
   const a=document.createElement("a");
-  a.href=canvas.toDataURL("image/jpeg",0.95);
-  a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.jpg`; a.click();
+  a.href=canvas.toDataURL("image/jpeg",0.96);
+  a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.jpg`;
+  a.click();
 }
 
 const SS={
@@ -546,38 +581,10 @@ export default function App(){
   }
 
   function printPDF(){
-    const label = showOre ? cellLabelOre : cellLabel;
-    const rows = STAFF.map(person=>{
-      const cells = DAYS.map((day,di)=>{
-        const shifts = Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
-        const cv = constraints?.[person]?.[di];
-        if(cv==="abs") return `<td style="background:#fee2e2;color:#ef4444;font-size:10px;text-align:center;padding:6px 4px;border:1px solid #e5e7eb;">assente</td>`;
-        if(shifts.length===0) return `<td style="text-align:center;padding:6px 4px;border:1px solid #e5e7eb;color:#d1d5db;">—</td>`;
-        const badges = shifts.map(shift=>{
-          const isCassa = isCassaCell(person,day,shift);
-          const bg = isCassa?"#e5e7eb":shift==="Mattina"?"#fef3c7":shift==="Pomeriggio"?"#dbeafe":shift==="PS"?"#ede9fe":shift==="Turno Unico"?"#dcfce7":"#f3f4f6";
-          const color = isCassa?"#4b5563":shift==="Mattina"?"#92400e":shift==="Pomeriggio"?"#1e40af":shift==="PS"?"#5b21b6":shift==="Turno Unico"?"#166534":"#374151";
-          const lbl = label(person,day,shift);
-          return `<span style="display:inline-block;background:${bg};color:${color};font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;margin:1px;">${lbl}</span>`;
-        }).join("");
-        return `<td style="text-align:center;padding:6px 4px;border:1px solid #e5e7eb;">${badges}</td>`;
-      }).join("");
-      return `<tr><td style="padding:6px 10px;font-weight:700;color:#374151;border:1px solid #e5e7eb;white-space:nowrap;">${person}</td>${cells}</tr>`;
-    }).join("");
-
-    const headers = DAYS.map((d,i)=>`<th style="padding:8px 6px;text-align:center;font-weight:600;color:white;">${d}<br/><span style="font-size:10px;font-weight:400;opacity:.8;">${colDates[i]}</span></th>`).join("");
-
+    const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints);
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Turni ${formatDate(weekStart)}</title>
-    <style>@page{size:A4 landscape;margin:12mm} body{font-family:sans-serif;font-size:11px;} table{width:100%;border-collapse:collapse;} thead tr{background:#4f46e5;}</style>
-    </head><body>
-    <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-      <strong style="font-size:14px;">📅 Turni Ambulatorio</strong>
-      <span style="font-size:11px;color:#6b7280;">Settimana ${formatDate(weekStart)} — ${formatDate(weekEnd)}</span>
-    </div>
-    <table><thead><tr><th style="padding:8px 10px;text-align:left;font-weight:600;color:white;">Personale</th>${headers}<th style="padding:8px 6px;text-align:center;font-weight:600;color:white;">Tot</th></tr></thead>
-    <tbody>${rows}</tbody></table>
-    <script>window.onload=()=>{window.print();}</script></body></html>`;
-
+    <style>@page{size:A4 landscape;margin:10mm} body{font-family:'Segoe UI',Arial,sans-serif;background:#F8FAFC;padding:16px;}</style>
+    </head><body>${tableHTML}<script>window.onload=()=>window.print();<\/script></body></html>`;
     const w=window.open("","_blank");
     w.document.write(html);
     w.document.close();
