@@ -404,7 +404,7 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
         const lbl=label(person,day,shift);
         // Forza il testo a capo dopo il trattino/spazio per ridurre larghezza badge
         const lblWrapped=lbl.replace(/–|-/g,"‑<wbr/>").replace(/\s+/g,"<br/>");
-        return `<div style="display:inline-block;background:${c.bg};color:${c.fg};border:1px solid ${c.border};font-size:9px;font-weight:700;padding:3px 5px;border-radius:5px;margin:2px auto;line-height:1.3;text-align:center;max-width:${colW-10}px;word-break:break-word;">${lblWrapped}</div>`;
+        return `<div style="display:inline-flex;align-items:center;justify-content:center;background:${c.bg};color:${c.fg};border:1px solid ${c.border};font-size:9px;font-weight:700;padding:4px 5px;border-radius:5px;margin:2px auto;line-height:1.3;text-align:center;max-width:${colW-10}px;word-break:break-word;min-height:28px;">${lblWrapped}</div>`;
       }).join("");
       return `<td style="${tdBase}">${badges}</td>`;
     }).join("");
