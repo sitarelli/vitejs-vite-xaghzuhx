@@ -109,6 +109,21 @@ function simulate(weekStart, seed, sabato, constraints){
     if(done<n) warnings.push(`${name}: ${done}/${n} turni ${t}`);
   }
 
+  // ── PRE-ASSEGNAZIONE VINCOLI FORZANTI (onM / onP) ───────────────
+  // Priorità ASSOLUTA: vengono assegnati prima di tutto il resto,
+  // ignorando i limiti di copertura giornaliera (MAX).
+  for(const name of STAFF){
+    for(let di=0;di<5;di++){
+      const c=cof(name,di);
+      if(c==="onM" && !S[di].M.includes(name)){
+        S[di].M.push(name);
+      }
+      if(c==="onP" && !S[di].P.includes(name)){
+        S[di].P.push(name);
+      }
+    }
+  }
+
   // ── FISSI ────────────────────────────────────────────────────────
   if(!constraintBlocks(cof("Giulia",LUN),"P")) tryAdd("Giulia",LUN,"P");
   if(!constraintBlocks(cof("Giulia",VEN),"P")) tryAdd("Giulia",VEN,"P");
@@ -196,21 +211,6 @@ function simulate(weekStart, seed, sabato, constraints){
   if(mD<3) warnings.push(`Mary: ${mD}/3 giorni M+PS`);
   if(!mOM) warnings.push("Mary: giorno solo M mancante");
   if(!mOP) warnings.push("Mary: giorno solo P mancante");
-
-  // ── PRE-ASSEGNAZIONE VINCOLI FORZANTI (onM / onP) ───────────────
-  // Per ogni persona, i giorni con vincolo forzante vengono assegnati
-  // PRIMA di qualsiasi altra logica, con priorità assoluta.
-  for(const name of STAFF){
-    for(let di=0;di<5;di++){
-      const c=cof(name,di);
-      if(c==="onM" && !S[di].M.includes(name) && covM(di)<MAX){
-        S[di].M.push(name);
-      }
-      if(c==="onP" && !S[di].P.includes(name) && covPnorm(di)<MAX){
-        S[di].P.push(name);
-      }
-    }
-  }
 
   // ── GIORGIA ───────────────────────────────────────────────────────
   // Conta i giorni M già assegnati (da vincolo forzante o da logica precedente)
