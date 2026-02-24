@@ -17,6 +17,11 @@ const CONSTRAINT_OPTS=[
   {val:"onP", label:"🌙 Solo Pomeriggio"},
 ];
 
+const CONSTRAINT_OPTS_SAB=[
+  {val:"",    label:"—"},
+  {val:"abs", label:"🏠 Assente"},
+];
+
 const CASSA_SLOTS=new Set(["2-P","3-M","4-P"]);
 function isCassa(di,t){ return CASSA_SLOTS.has(`${di}-${t}`); }
 function isCassaPerson(n,di,t){ return n==="Consuelo"&&isCassa(di,t); }
@@ -66,13 +71,24 @@ function simulate(weekStart, seed, sabato, constraints){
   function turniInGiorno(name,di){
     return ["M","P","PS"].reduce((n,t)=>n+(S[di][t].includes(name)&&!isCassaPerson(name,di,t)?1:0),0);
   }
+  // constraintForces: se il vincolo IMPONE un turno specifico (onM→M obbligatorio, onP→P/PS obbligatorio)
+  function constraintForces(c, t){
+    if(!c) return false;
+    if(c==="onM" && t==="M") return true;
+    if(c==="onP" && (t==="P"||t==="PS")) return true;
+    return false;
+  }
   function tryAdd(name,di,t,maxPerDay=1){
     if(S[di][t].includes(name)) return false;
     if(constraintBlocks(cof(name,di),t)) return false;
+    const forced = constraintForces(cof(name,di),t);
     if(!isCassaPerson(name,di,t)){
       const cur=t==="M"?covM(di):t==="U"?covU():covP(di);
       if(cur>=MAX) return false;
-      if(turniInGiorno(name,di)>=maxPerDay) return false;
+      // I vincoli espliciti (onM/onP) saltano i limiti di turni-per-giorno e giorni-per-settimana
+      if(!forced){
+        if(turniInGiorno(name,di)>=maxPerDay) return false;
+      }
       if(t==="PS"&&countPS(di)>=1) return false;
     }
     S[di][t].push(name); return true;
@@ -84,7 +100,10 @@ function simulate(weekStart, seed, sabato, constraints){
       const depr=sh(pool.filter(d=>d===MAR||d===GIO));
       p=[...prio,...depr];
     } else { p=sh(pool); }
-    p=p.filter(di=>!constraintBlocks(cof(name,di),t));
+    // Giorni con vincolo forzante vanno in testa, quelli bloccati vengono esclusi
+    const forced  = p.filter(di=> constraintForces(cof(name,di),t));
+    const normal  = p.filter(di=>!constraintForces(cof(name,di),t) && !constraintBlocks(cof(name,di),t));
+    p=[...forced,...normal];
     let done=0;
     for(const di of p){ if(done>=n) break; if(tryAdd(name,di,t,maxPerDay)) done++; }
     if(done<n) warnings.push(`${name}: ${done}/${n} turni ${t}`);
@@ -528,11 +547,12 @@ export default function App(){
                         <td className="px-3 py-1.5 font-semibold text-gray-700">{name}</td>
                         {DAYS.map((_,di)=>{
                           const val=constraints?.[name]?.[di]||"";
+                          const opts = di===SAB ? CONSTRAINT_OPTS_SAB : CONSTRAINT_OPTS;
                           return (
                             <td key={di} className="px-1 py-1 text-center">
                               <select value={val} onChange={e=>setConstraint(name,di,e.target.value)}
                                 className={`text-xs rounded border px-1 py-0.5 w-full max-w-[90px] ${val?CONSTRAINT_COLORS[val]+" border-transparent":"border-gray-200 text-gray-500"}`}>
-                                {CONSTRAINT_OPTS.map(o=><option key={o.val} value={o.val}>{o.label}</option>)}
+                                {opts.map(o=><option key={o.val} value={o.val}>{o.label}</option>)}
                               </select>
                             </td>
                           );
