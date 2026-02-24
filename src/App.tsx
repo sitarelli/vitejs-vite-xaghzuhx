@@ -355,7 +355,21 @@ export default function App(){
   }
   function countShifts(p){
     if(!turni) return 0;
-    return DAYS.reduce((acc,day)=>acc+getShifts(p,day).filter(s=>!isCassaCell(p,day,s)).length,0);
+    return DAYS.reduce((acc,day)=>{
+      const shifts=getShifts(p,day);
+      if(shifts.length===0) return acc;
+      // Sabato: Turno Unico = 1 gg
+      if(shifts.includes("Turno Unico")) return acc+1;
+      const hasM   = shifts.includes("Mattina");
+      const hasPS  = shifts.includes("PS");
+      const hasPnorm = shifts.includes("Pomeriggio") && !isCassaCell(p,day,"Pomeriggio");
+      const hasMcassa = shifts.includes("Mattina") && isCassaCell(p,day,"Mattina");
+      const hasPcassa = shifts.includes("Pomeriggio") && isCassaCell(p,day,"Pomeriggio");
+      // M+PS = 1 gg; M+P cassa = 1 gg; solo cassa = 1 gg; solo M o P normale = 1 gg
+      // In ogni caso un giorno in cui si lavora conta 1
+      if(hasM||hasPS||hasPnorm||hasMcassa||hasPcassa) return acc+1;
+      return acc;
+    },0);
   }
   function covDisplay(day){
     if(!turni) return 0;
