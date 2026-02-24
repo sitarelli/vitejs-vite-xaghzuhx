@@ -228,11 +228,18 @@ function simulate(weekStart, seed, sabato, constraints){
 
   // ── DIANE ─────────────────────────────────────────────────────────
   {
+    // Helper: Diane ha già un pomeriggio (P o PS) nel giorno adiacente?
+    function dianeHasPomAdiacente(di){
+      const prev=di-1; const next=di+1;
+      const hasPom=(d)=>d>=0&&d<=4&&(S[d].P.includes("Diane")||S[d].PS.includes("Diane"));
+      return hasPom(prev)||hasPom(next);
+    }
     const forcedM=WDAYS.filter(di=>S[di].M.includes("Diane"));
     const neededM=Math.max(0, 2-forcedM.length);
     if(neededM>0) assignN("Diane", WDAYS.filter(di=>!S[di].M.includes("Diane")), "M", neededM, 1);
     const diMD=WDAYS.filter(di=>S[di].M.includes("Diane"));
-    const diPPool=sh(WDAYS.filter(di=>!diMD.includes(di) && !S[di].P.includes("Diane")));
+    // Pool pomeriggi: escludi giorni M, già P, e giorni adiacenti a un P/PS esistente
+    const diPPool=sh(WDAYS.filter(di=>!diMD.includes(di) && !S[di].P.includes("Diane") && !dianeHasPomAdiacente(di)));
     const forcedP=WDAYS.filter(di=>S[di].P.includes("Diane")).length;
     let diP=forcedP;
     for(const di of diPPool){ if(diP>=2) break; if(tryAdd("Diane",di,"P",1)) diP++; }
@@ -240,6 +247,11 @@ function simulate(weekStart, seed, sabato, constraints){
   }
 
   // ── REPERIBILITÀ PS ───────────────────────────────────────────────
+  // Helper riutilizzabile per check consecutivi Diane
+  function dianeConsecutivePom(di){
+    const hasPom=(d)=>d>=0&&d<=4&&(S[d].P.includes("Diane")||S[d].PS.includes("Diane"));
+    return hasPom(di-1)||hasPom(di+1);
+  }
   const psElig=[
     {name:"Giorgia", days:[...WDAYS]},
     {name:"Diane",   days:[...WDAYS].sort((a,b)=>{ const aP=S[a].P.includes("Diane"),bP=S[b].P.includes("Diane"); return aP&&!bP?-1:!aP&&bP?1:0; })},
@@ -253,6 +265,7 @@ function simulate(weekStart, seed, sabato, constraints){
       if(psUsed.has(name)) continue;
       if(!days.includes(di)) continue;
       if(constraintBlocks(cof(name,di),"M")||constraintBlocks(cof(name,di),"PS")) continue;
+      if(name==="Diane" && dianeConsecutivePom(di)) continue;
       if(S[di].P.includes(name)&&!isCassaPerson(name,di,"P")&&!S[di].M.includes(name)&&covM(di)<MAX&&countPS(di)<1){
         S[di].P.splice(S[di].P.indexOf(name),1);
         S[di].M.push(name); S[di].PS.push(name); psUsed.add(name);
@@ -264,6 +277,7 @@ function simulate(weekStart, seed, sabato, constraints){
         if(psUsed.has(name)) continue;
         if(!days.includes(di)) continue;
         if(constraintBlocks(cof(name,di),"PS")) continue;
+        if(name==="Diane" && dianeConsecutivePom(di)) continue;
         if(MAX_P[name]&&countPomeriggi(name)>=MAX_P[name]) continue;
         if(S[di].M.includes(name)&&!S[di].PS.includes(name)&&!S[di].P.includes(name)&&countPS(di)<1){
           S[di].PS.push(name); psUsed.add(name);
@@ -276,6 +290,7 @@ function simulate(weekStart, seed, sabato, constraints){
         if(psUsed.has(name)) continue;
         if(!days.includes(di)) continue;
         if(constraintBlocks(cof(name,di),"M")||constraintBlocks(cof(name,di),"PS")) continue;
+        if(name==="Diane" && dianeConsecutivePom(di)) continue;
         if(S[di].M.includes(name)||covM(di)>=MAX||turniInGiorno(name,di)>0) continue;
         if(MAX_DAYS[name]&&workingDays(name)>=MAX_DAYS[name]) continue;
         if(MAX_P[name]&&countPomeriggi(name)>=MAX_P[name]) continue;
@@ -330,42 +345,80 @@ function getMonday(date){
 function formatDate(d){ return d.toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 
 function exportXLS(turni,weekStart,showOre,constraints){
-  const label=(p,day,shift)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
-  const shiftColors={
-    Mattina:     {bg:"#FEF9C3",fg:"#78350F"},
-    Pomeriggio:  {bg:"#DBEAFE",fg:"#1E3A8A"},
-    PS:          {bg:"#EDE9FE",fg:"#4C1D95"},
-    "Turno Unico":{bg:"#DCFCE7",fg:"#14532D"},
-  };
-  const hdStyle=`background:#4F46E5;color:white;font-weight:bold;font-size:11pt;text-align:center;padding:6px;border:1px solid #3730A3;`;
-  const hdStyleL=`background:#4F46E5;color:white;font-weight:bold;font-size:11pt;text-align:left;padding:6px;border:1px solid #3730A3;`;
-  const headers=DAYS.map((d,i)=>`<th style="${hdStyle}">${d} ${new Date(new Date(weekStart).setDate(new Date(weekStart).getDate()+i)).getDate()}</th>`).join("");
-  const rows=STAFF.map((person,pi)=>{
-    const bg=pi%2===0?"#FFFFFF":"#F9FAFB";
-    const cells=DAYS.map((day,di)=>{
-      const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
-      const cv=constraints?.[person]?.[di];
-      if(cv==="abs") return `<td style="background:#FEE2E2;color:#EF4444;text-align:center;font-size:9pt;border:1px solid #E5E7EB;">assente</td>`;
-      if(!shifts.length) return `<td style="background:${bg};color:#D1D5DB;text-align:center;border:1px solid #E5E7EB;">—</td>`;
-      const content=shifts.map(shift=>{
-        const isCassa=isCassaCell(person,day,shift);
-        const c=isCassa?{bg:"#E5E7EB",fg:"#4B5563"}:(shiftColors[shift]||{bg:"#F3F4F6",fg:"#374151"});
-        return `<div style="display:inline-block;background:${c.bg};color:${c.fg};font-size:8pt;font-weight:bold;padding:2px 6px;border-radius:3px;margin:1px;">${label(person,day,shift)}</div>`;
-      }).join("");
-      return `<td style="background:${bg};text-align:center;vertical-align:middle;padding:4px;border:1px solid #E5E7EB;">${content}</td>`;
-    }).join("");
-    return `<tr><td style="background:${bg};font-weight:bold;color:#1F2937;padding:6px 10px;border:1px solid #E5E7EB;white-space:nowrap;">${person}</td>${cells}</tr>`;
-  }).join("");
-  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"/><style>table{border-collapse:collapse;font-family:Calibri,sans-serif;}</style></head>
-<body><table>
-<thead><tr><th style="${hdStyleL}">Personale</th>${headers}<th style="${hdStyle}">Tot</th></tr></thead>
-<tbody>${rows}</tbody>
-</table></body></html>`;
-  const blob=new Blob(["\uFEFF"+html],{type:"application/vnd.ms-excel;charset=utf-8"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.xls`; a.click();
+  // Carica SheetJS se non già presente
+  function doExport(){
+    const XLSX=window.XLSX;
+    const label=(p,day,shift)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
+
+    // Costruisci array di array per il foglio
+    const dateRow=["Personale",...DAYS.map((d,i)=>{
+      const dd=new Date(weekStart); dd.setDate(dd.getDate()+i);
+      return `${d} ${dd.getDate()}`;
+    }),"Tot"];
+
+    const dataRows=STAFF.map(person=>{
+      const cells=DAYS.map((day,di)=>{
+        const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
+        const cv=constraints?.[person]?.[di];
+        if(cv==="abs") return "assente";
+        if(!shifts.length) return "—";
+        return shifts.map(shift=>label(person,day,shift)).join(" | ");
+      });
+      const tot=DAYS.reduce((acc,day)=>{
+        const sh=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
+        if(!sh.length) return acc;
+        if(sh.includes("Turno Unico")) return acc+1;
+        return sh.some(s=>["Mattina","PS","Pomeriggio"].includes(s))?acc+1:acc;
+      },0);
+      return [person,...cells,tot];
+    });
+
+    const ws=XLSX.utils.aoa_to_sheet([dateRow,...dataRows]);
+
+    // Larghezze colonne
+    ws["!cols"]=[{wch:14},...DAYS.map(()=>({wch:22})),{wch:6}];
+
+    // Stili header (sfondo indigo, testo bianco)
+    const range=XLSX.utils.decode_range(ws["!ref"]);
+    for(let C=range.s.c;C<=range.e.c;C++){
+      const addr=XLSX.utils.encode_cell({r:0,c:C});
+      if(!ws[addr]) continue;
+      ws[addr].s={
+        font:{bold:true,color:{rgb:"FFFFFF"},sz:11},
+        fill:{fgColor:{rgb:"4F46E5"}},
+        alignment:{horizontal:"center",vertical:"center",wrapText:true},
+        border:{bottom:{style:"thin",color:{rgb:"3730A3"}}},
+      };
+    }
+    // Stili righe dati
+    for(let R=1;R<=dataRows.length;R++){
+      const bg=R%2===0?"F9FAFB":"FFFFFF";
+      for(let C=range.s.c;C<=range.e.c;C++){
+        const addr=XLSX.utils.encode_cell({r:R,c:C});
+        if(!ws[addr]) ws[addr]={t:"s",v:""};
+        ws[addr].s={
+          fill:{fgColor:{rgb:bg}},
+          font:{sz:10,bold:C===0},
+          alignment:{horizontal:C===0?"left":"center",vertical:"center",wrapText:true},
+          border:{
+            top:{style:"thin",color:{rgb:"E5E7EB"}},
+            bottom:{style:"thin",color:{rgb:"E5E7EB"}},
+            left:{style:"thin",color:{rgb:"E5E7EB"}},
+            right:{style:"thin",color:{rgb:"E5E7EB"}},
+          },
+        };
+      }
+    }
+
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Turni");
+    XLSX.writeFile(wb,`turni_${formatDate(weekStart).replace(/\//g,"-")}.xlsx`);
+  }
+
+  if(window.XLSX){ doExport(); return; }
+  const s=document.createElement("script");
+  s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  s.onload=doExport; document.head.appendChild(s);
 }
 function exportJSON(turni,weekStart){
   const a=document.createElement("a");
@@ -631,7 +684,7 @@ export default function App(){
               🕐 {showOre?"Mostra sigle":"Mostra orari"}
             </button>
             {turni && <>
-              <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLS</button>
+              <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLSX</button>
               <button onClick={()=>exportJSON(turni,weekStart)} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium shadow-sm">⬇ JSON</button>
               <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 PDF</button>
               <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
