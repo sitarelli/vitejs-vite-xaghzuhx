@@ -483,7 +483,7 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
 
   return `<div style="width:${totalW}px;margin:0 auto;">
   <div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-    <span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Turni Ambulatorio</span>
+    <span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Gestione Turni</span>
     <span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span>
   </div>
   <table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;">
@@ -652,7 +652,7 @@ export default function App(){
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-              <h1 className="text-xl font-bold text-gray-800">📅 Turni Ambulatorio</h1>
+              <h1 className="text-xl font-bold text-gray-800">📅 Gestione Turni</h1>
               <p className="text-sm text-gray-500 mt-0.5">Settimana {formatDate(weekStart)} — {formatDate(weekEnd)}</p>
             </div>
             <div className="flex gap-2">
@@ -884,19 +884,56 @@ export default function App(){
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Regole applicate</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-600">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Regole da applicare</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-600">
                 {[
-                  ["Claudia","Con sab: 1M+3P lun-ven + sab TU · Senza sab: 2M+3P lun-ven"],
-                  ["Consuelo","lun P · mar M · mer M+P-cassa · gio M-cassa · ven P-cassa · riposo solo sett. con sab · lun/mar → M+PS"],
-                  ["Diane","4gg lun-ven · 2M · max 2 pomeriggi · PS reperibilità max 1/sett"],
-                  ["Giorgia","6gg · sab TU · 2M+3P · PS reperibilità max 1/sett"],
-                  ["Giulia","solo lun P e ven P"],
-                  ["Mary","6gg · sab TU · 3gg M+PS · 1gg M · 1gg P"],
-                ].map(([name,rule])=>(
-                  <div key={name} className="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                    <span className="font-semibold text-indigo-700">{name}</span>
-                    <p className="mt-0.5 leading-relaxed">{rule}</p>
+                  ["Claudia",[
+                    "Settimana con sabato: 1 turno M + 3 turni P nei giorni lun–ven + Turno Unico sabato",
+                    "Settimana senza sabato: 2 turni M + 3 turni P nei giorni lun–ven",
+                    "I giorni M sono preferibilmente lun, mer o ven (mar e gio in seconda scelta)",
+                    "Ogni giorno lavora un solo turno (M oppure P, mai entrambi nello stesso giorno)",
+                    "Non assegnata a PS/reperibilità serale",
+                  ]],
+                  ["Consuelo",[
+                    "Turni fissi settimanali: lun P, mar M, mer M+P (cassa), gio M (cassa), ven P (cassa)",
+                    "Le celle 'cassa' (mer P, gio M, ven P) non contano nella copertura standard",
+                    "Nelle settimane in cui fa sabato: riposo compensativo il lunedì o il martedì (a rotazione)",
+                    "Nelle settimane con sabato: Turno Unico il sabato",
+                    "Può fare reperibilità PS (max 1/sett) solo il lun o il mar, mai nel giorno di riposo",
+                    "PS su lun o mar: se ha già P passa a M+PS; se ha già M aggiunge PS",
+                  ]],
+                  ["Diane",[
+                    "Lavora al massimo 4 giorni su lun–ven",
+                    "Esattamente 2 turni M nella settimana",
+                    "Massimo 2 pomeriggi (P o PS) nella settimana",
+                    "I pomeriggi non devono essere in giorni consecutivi",
+                    "Può fare reperibilità PS max 1 volta a settimana",
+                    "Non è assegnata al sabato",
+                  ]],
+                  ["Giorgia",[
+                    "Lavora 6 giorni: 5 giorni lun–ven + Turno Unico il sabato (fisso)",
+                    "Esattamente 2 turni M + 3 turni P nei giorni lun–ven",
+                    "M e P assegnati in giorni diversi (mai stesso giorno)",
+                    "Può fare reperibilità PS max 1 volta a settimana",
+                  ]],
+                  ["Giulia",[
+                    "Lavora solo 2 giorni fissi: lunedì P e venerdì P",
+                    "Non assegnata ad altri giorni né ad altri turni",
+                    "Non assegnata al sabato",
+                    "Non fa PS/reperibilità serale",
+                  ]],
+                  ["Mary",[
+                    "Lavora 6 giorni: 5 giorni lun–ven + Turno Unico il sabato (fisso)",
+                    "Schema lun–ven: esattamente 3 giorni M+PS (mattina + reperibilità serale), 1 giorno solo M, 1 giorno solo P",
+                    "Priorità ai giorni con carenza di copertura M o P nella scelta dei giorni M+PS",
+                    "M e P/PS sempre in giorni distinti (mai stesso giorno)",
+                  ]],
+                ].map(([name,rules])=>(
+                  <div key={name} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                    <span className="font-semibold text-indigo-700 block mb-1">{name}</span>
+                    <ul className="space-y-0.5">
+                      {rules.map((r,i)=><li key={i} className="flex gap-1.5"><span className="text-indigo-300 mt-px">•</span><span>{r}</span></li>)}
+                    </ul>
                   </div>
                 ))}
               </div>
