@@ -228,21 +228,23 @@ function simulate(weekStart, seed, sabato, constraints){
 
   // ── DIANE ─────────────────────────────────────────────────────────
   {
-    // Helper: Diane ha già un pomeriggio (P o PS) nel giorno adiacente?
-    function dianeHasPomAdiacente(di){
-      const prev=di-1; const next=di+1;
-      const hasPom=(d)=>d>=0&&d<=4&&(S[d].P.includes("Diane")||S[d].PS.includes("Diane"));
-      return hasPom(prev)||hasPom(next);
+    // Ricontrollato ad ogni assegnazione, non pre-calcolato
+    function dianeAdjacentPom(di){
+      const hasPom=(d)=>d>=LUN&&d<=VEN&&(S[d].P.includes("Diane")||S[d].PS.includes("Diane"));
+      return hasPom(di-1)||hasPom(di+1);
     }
     const forcedM=WDAYS.filter(di=>S[di].M.includes("Diane"));
     const neededM=Math.max(0, 2-forcedM.length);
     if(neededM>0) assignN("Diane", WDAYS.filter(di=>!S[di].M.includes("Diane")), "M", neededM, 1);
     const diMD=WDAYS.filter(di=>S[di].M.includes("Diane"));
-    // Pool pomeriggi: escludi giorni M, già P, e giorni adiacenti a un P/PS esistente
-    const diPPool=sh(WDAYS.filter(di=>!diMD.includes(di) && !S[di].P.includes("Diane") && !dianeHasPomAdiacente(di)));
+    const diPPool=sh(WDAYS.filter(di=>!diMD.includes(di) && !S[di].P.includes("Diane")));
     const forcedP=WDAYS.filter(di=>S[di].P.includes("Diane")).length;
     let diP=forcedP;
-    for(const di of diPPool){ if(diP>=2) break; if(tryAdd("Diane",di,"P",1)) diP++; }
+    for(const di of diPPool){
+      if(diP>=2) break;
+      if(dianeAdjacentPom(di)) continue; // rivaluta in tempo reale dopo ogni assegnazione
+      if(tryAdd("Diane",di,"P",1)) diP++;
+    }
     if(diP<2) warnings.push(`Diane: ${diP}/2 turni P`);
   }
 
@@ -455,9 +457,8 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
         const isCassa=isCassaCell(person,day,shift);
         const c=isCassa?{bg:"#E2E8F0",fg:"#475569",border:"#94A3B8"}:(shiftColors[shift]||{bg:"#F1F5F9",fg:"#334155",border:"#94A3B8"});
         const lbl=label(person,day,shift);
-        // Forza il testo a capo dopo il trattino/spazio per ridurre larghezza badge
         const lblWrapped=lbl.replace(/–|-/g,"‑<wbr/>").replace(/\s+/g,"<br/>");
-        return `<div style="display:block;background:${c.bg};color:${c.fg};border:1px solid ${c.border};font-size:9px;font-weight:700;padding:6px 5px;border-radius:5px;margin:2px auto;line-height:1.4;text-align:center;max-width:${colW-10}px;word-break:break-word;">${lblWrapped}</div>`;
+        return `<table style="display:inline-table;background:${c.bg};border:1px solid ${c.border};border-radius:5px;margin:2px auto;width:${colW-12}px;min-height:32px;"><tbody><tr><td style="color:${c.fg};font-size:9px;font-weight:700;text-align:center;vertical-align:middle;padding:4px 4px;line-height:1.35;word-break:break-word;">${lblWrapped}</td></tr></tbody></table>`;
       }).join("");
       return `<td style="${tdBase}">${badges}</td>`;
     }).join("");
@@ -685,13 +686,9 @@ export default function App(){
             </button>
             {turni && <>
               <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLSX</button>
-              <button onClick={()=>exportJSON(turni,weekStart)} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium shadow-sm">⬇ JSON</button>
               <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 PDF</button>
               <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
             </>}
-            <label className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium cursor-pointer shadow-sm">
-              📂 Importa JSON<input type="file" accept=".json" className="hidden" onChange={handleImport}/>
-            </label>
           </div>
 
           {turni && (
