@@ -395,7 +395,7 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
     const cells=DAYS.map((day,di)=>{
       const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
       const cv=constraints?.[person]?.[di];
-      const tdBase=`background:${bg};text-align:center;vertical-align:middle;padding:5px 2px;border:1px solid #CBD5E1;width:${colW}px;`;
+      const tdBase=`background:${bg};text-align:center;vertical-align:top;padding:5px 2px;border:1px solid #CBD5E1;width:${colW}px;`;
       if(cv==="abs") return `<td style="${tdBase}background:#FEE2E2;"><span style="color:#EF4444;font-size:9px;font-weight:700;">assente</span></td>`;
       if(!shifts.length) return `<td style="${tdBase}"><span style="color:#CBD5E1;font-size:11px;">—</span></td>`;
       const badges=shifts.map(shift=>{
@@ -404,7 +404,7 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
         const lbl=label(person,day,shift);
         // Forza il testo a capo dopo il trattino/spazio per ridurre larghezza badge
         const lblWrapped=lbl.replace(/–|-/g,"‑<wbr/>").replace(/\s+/g,"<br/>");
-        return `<div style="display:inline-flex;align-items:center;justify-content:center;background:${c.bg};color:${c.fg};border:1px solid ${c.border};font-size:9px;font-weight:700;padding:4px 5px;border-radius:5px;margin:2px auto;line-height:1.3;text-align:center;max-width:${colW-10}px;word-break:break-word;min-height:28px;">${lblWrapped}</div>`;
+        return `<div style="display:block;background:${c.bg};color:${c.fg};border:1px solid ${c.border};font-size:9px;font-weight:700;padding:6px 5px;border-radius:5px;margin:2px auto;line-height:1.4;text-align:center;max-width:${colW-10}px;word-break:break-word;">${lblWrapped}</div>`;
       }).join("");
       return `<td style="${tdBase}">${badges}</td>`;
     }).join("");
