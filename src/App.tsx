@@ -500,12 +500,7 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints){
 
 async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints){
   const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints);
-  // Larghezza canvas = A4 portrait ~794px + padding
   const canvasW=842;
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/>
-  <style>*{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#F8FAFC;padding:24px;width:${canvasW}px;font-family:'Segoe UI',Arial,sans-serif;}
-  </style></head><body>${tableHTML}</body></html>`;
 
   if(!window._h2c){
     await new Promise((res,rej)=>{
@@ -515,23 +510,26 @@ async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints){
     });
     window._h2c=true;
   }
-  const iframe=document.createElement("iframe");
-  iframe.style.cssText=`position:fixed;left:-9999px;top:0;width:${canvasW}px;height:1200px;border:none;`;
-  document.body.appendChild(iframe);
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(html);
-  iframe.contentDocument.close();
-  await new Promise(r=>setTimeout(r,400));
-  const body=iframe.contentDocument.body;
-  const canvas=await window.html2canvas(body,{
+
+  // Render nel documento principale (non in un iframe) così html2canvas
+  // può accedere direttamente agli elementi e cattura testo e colori correttamente
+  const wrapper=document.createElement("div");
+  wrapper.style.cssText=`position:fixed;left:-9999px;top:0;width:${canvasW}px;background:#F8FAFC;padding:24px;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;`;
+  wrapper.innerHTML=tableHTML;
+  document.body.appendChild(wrapper);
+
+  // Breve attesa per il layout
+  await new Promise(r=>setTimeout(r,300));
+
+  const canvas=await window.html2canvas(wrapper,{
     scale:2.5,
     backgroundColor:"#F8FAFC",
     useCORS:true,
     width:canvasW,
-    height:body.scrollHeight+48,
+    height:wrapper.scrollHeight+48,
     windowWidth:canvasW,
   });
-  document.body.removeChild(iframe);
+  document.body.removeChild(wrapper);
   const a=document.createElement("a");
   a.href=canvas.toDataURL("image/jpeg",0.96);
   a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.jpg`;
