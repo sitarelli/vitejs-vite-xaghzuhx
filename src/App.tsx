@@ -305,6 +305,15 @@ function cellLabel(p,day,shift){
 
 const CONSTRAINT_COLORS={"abs":"bg-red-100 text-red-600","noM":"bg-orange-100 text-orange-600","noP":"bg-orange-100 text-orange-600","onM":"bg-sky-100 text-sky-600","onP":"bg-sky-100 text-sky-600"};
 
+function cellLabelOre(p,day,shift){
+  if(isCassaCell(p,day,shift)) return shift==="Mattina"?"(7-14)":"(14-CH)";
+  if(shift==="Mattina") return "8.00-14.30";
+  if(shift==="Pomeriggio") return "14.30-21.00";
+  if(shift==="PS") return "(18-21 REP)";
+  if(shift==="Turno Unico") return "8-CH";
+  return shift;
+}
+
 export default function App(){
   const [weekOffset,setWeekOffset]=useState(1);
   const [result,setResult]=useState(null);
@@ -312,6 +321,7 @@ export default function App(){
   const [sabScelto,setSabScelto]=useState("auto");
   const [constraints,setConstraints]=useState({});
   const [showConstraints,setShowConstraints]=useState(false);
+  const [showOre,setShowOre]=useState(false);
 
   const baseMonday=getMonday(new Date());
   const weekStart=new Date(baseMonday);
@@ -359,6 +369,44 @@ export default function App(){
     r.readAsText(f); e.target.value="";
   }
 
+  function printPDF(){
+    const label = showOre ? cellLabelOre : cellLabel;
+    const rows = STAFF.map(person=>{
+      const cells = DAYS.map((day,di)=>{
+        const shifts = Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
+        const cv = constraints?.[person]?.[di];
+        if(cv==="abs") return `<td style="background:#fee2e2;color:#ef4444;font-size:10px;text-align:center;padding:6px 4px;border:1px solid #e5e7eb;">assente</td>`;
+        if(shifts.length===0) return `<td style="text-align:center;padding:6px 4px;border:1px solid #e5e7eb;color:#d1d5db;">—</td>`;
+        const badges = shifts.map(shift=>{
+          const isCassa = isCassaCell(person,day,shift);
+          const bg = isCassa?"#e5e7eb":shift==="Mattina"?"#fef3c7":shift==="Pomeriggio"?"#dbeafe":shift==="PS"?"#ede9fe":shift==="Turno Unico"?"#dcfce7":"#f3f4f6";
+          const color = isCassa?"#4b5563":shift==="Mattina"?"#92400e":shift==="Pomeriggio"?"#1e40af":shift==="PS"?"#5b21b6":shift==="Turno Unico"?"#166534":"#374151";
+          const lbl = label(person,day,shift);
+          return `<span style="display:inline-block;background:${bg};color:${color};font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;margin:1px;">${lbl}</span>`;
+        }).join("");
+        return `<td style="text-align:center;padding:6px 4px;border:1px solid #e5e7eb;">${badges}</td>`;
+      }).join("");
+      return `<tr><td style="padding:6px 10px;font-weight:700;color:#374151;border:1px solid #e5e7eb;white-space:nowrap;">${person}</td>${cells}</tr>`;
+    }).join("");
+
+    const headers = DAYS.map((d,i)=>`<th style="padding:8px 6px;text-align:center;font-weight:600;color:white;">${d}<br/><span style="font-size:10px;font-weight:400;opacity:.8;">${colDates[i]}</span></th>`).join("");
+
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Turni ${formatDate(weekStart)}</title>
+    <style>@page{size:A4 landscape;margin:12mm} body{font-family:sans-serif;font-size:11px;} table{width:100%;border-collapse:collapse;} thead tr{background:#4f46e5;}</style>
+    </head><body>
+    <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+      <strong style="font-size:14px;">📅 Turni Ambulatorio</strong>
+      <span style="font-size:11px;color:#6b7280;">Settimana ${formatDate(weekStart)} — ${formatDate(weekEnd)}</span>
+    </div>
+    <table><thead><tr><th style="padding:8px 10px;text-align:left;font-weight:600;color:white;">Personale</th>${headers}<th style="padding:8px 6px;text-align:center;font-weight:600;color:white;">Tot</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <script>window.onload=()=>{window.print();}</script></body></html>`;
+
+    const w=window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+  }
+
   const pct=result&&result.maxScore>0?Math.round(result.score/result.maxScore*100):0;
   const colDates=DAYS.map((_,i)=>{ const d=new Date(weekStart); d.setDate(d.getDate()+i); return d.getDate(); });
 
@@ -395,9 +443,14 @@ export default function App(){
               className={`px-4 py-2 rounded-lg text-sm font-medium shadow-sm text-white ${computing?"bg-indigo-400 cursor-wait":"bg-indigo-600 hover:bg-indigo-700"}`}>
               {computing?"⏳ Ottimizzazione…":"✨ Elabora Turni"}
             </button>
+            <button onClick={()=>setShowOre(v=>!v)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border shadow-sm transition-all ${showOre?"bg-indigo-50 border-indigo-400 text-indigo-700":"bg-white border-gray-200 text-gray-600 hover:border-indigo-300"}`}>
+              🕐 {showOre?"Mostra sigle":"Mostra orari"}
+            </button>
             {turni && <>
               <button onClick={()=>exportCSV(turni,weekStart)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ CSV</button>
               <button onClick={()=>exportJSON(turni,weekStart)} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium shadow-sm">⬇ JSON</button>
+              <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 Stampa PDF</button>
             </>}
             <label className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium cursor-pointer shadow-sm">
               📂 Importa JSON<input type="file" accept=".json" className="hidden" onChange={handleImport}/>
@@ -552,7 +605,7 @@ export default function App(){
                         const shifts=getShifts(person,day);
                         const cv=constraints?.[person]?.[di];
                         return (
-                          <td key={day} className={`px-2 py-2 text-center border-r border-gray-100 min-w-[90px] ${cv==="abs"?"bg-red-50":""}`}>
+                          <td key={day} className={`px-2 py-2 text-center border-r border-gray-100 min-w-[100px] ${cv==="abs"?"bg-red-50":""}`}>
                             {cv==="abs"
                               ?<span className="text-xs text-red-300 font-medium">assente</span>
                               :shifts.length===0
@@ -560,7 +613,7 @@ export default function App(){
                                 :<div className="flex flex-col gap-1 items-center">
                                   {shifts.map(shift=>(
                                     <span key={shift} className={`text-xs font-semibold px-1.5 py-0.5 rounded ${isCassaCell(person,day,shift)?"bg-gray-200 text-gray-600":SS[shift]?.cell||"bg-gray-100"}`}>
-                                      {cellLabel(person,day,shift)}
+                                      {showOre ? cellLabelOre(person,day,shift) : cellLabel(person,day,shift)}
                                     </span>
                                   ))}
                                 </div>
@@ -578,18 +631,11 @@ export default function App(){
                   {[
                     {label:"n° Mattina",    fn:(day,di)=>(turni[day]?.["Mattina"]||[]).filter(s=>!isCassaCell(s,day,"Mattina")).length, min:di=>minCov(di,"M"), skip:di=>di===SAB},
                     {label:"n° Pomeriggio", fn:(day)=>covDisplay(day), min:di=>minCov(di,"P"), skip:di=>di===SAB},
-                    {label:"Sab Unico",     fn:(day)=>(turni[day]?.["Turno Unico"]||[]).length, min:()=>MAX, skip:di=>di!==SAB},
                   ].map(({label,fn,min,skip})=>(
                     <tr key={label} className="bg-gray-100 border-t border-gray-200">
                       <td className="px-4 py-2 text-xs text-gray-500 font-medium">{label}</td>
                       {DAYS.map((day,di)=>{
-                        if(di===SAB&&label==="n° Mattina"){
-                          const c=(turni[day]?.["Turno Unico"]||[]).length;
-                          return <td key={day} rowSpan={2} className="px-2 py-2 text-center text-xs border-r border-gray-200 align-middle">
-                            <span className={`font-bold px-2 py-1 rounded-lg text-sm ${c<MAX?"bg-red-100 text-red-700":"bg-green-100 text-green-700"}`}>{c}</span>
-                          </td>;
-                        }
-                        if(di===SAB&&label==="n° Pomeriggio") return null;
+                        if(di===SAB) return <td key={day} className="border-r border-gray-200"/>;
                         if(skip(di)) return <td key={day} className="border-r border-gray-200"/>;
                         const count=fn(day,di),m=min(di);
                         return (
