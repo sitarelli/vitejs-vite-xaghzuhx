@@ -158,13 +158,19 @@ function simulate(weekStart, seed, sabato, constraints){
   const claudiaMaxWdays=consueloSab?5:4;
   const claudiaMcount=consueloSab?2:1;
   const claudiaPool=sh(WDAYS.filter(di=>cof("Claudia",di)!=="abs")).slice(0,claudiaMaxWdays);
-  let clM=0;
-  const clMpool=[...sh(claudiaPool.filter(d=>d!==MAR&&d!==GIO)),...sh(claudiaPool.filter(d=>d===MAR||d===GIO))];
-  for(const di of clMpool){ if(clM>=claudiaMcount) break; if(tryAdd("Claudia",di,"M",1)) clM++; }
-  if(clM<claudiaMcount) warnings.push(`Claudia: ${clM}/${claudiaMcount} turni M`);
+  // Conta M già assegnati da vincolo forzante
+  const claudiaForcedM=claudiaPool.filter(di=>S[di].M.includes("Claudia"));
+  const claudiaNeedM=Math.max(0, claudiaMcount-claudiaForcedM.length);
+  if(claudiaNeedM>0){
+    const clMpool=[...sh(claudiaPool.filter(d=>d!==MAR&&d!==GIO&&!S[d].M.includes("Claudia"))),...sh(claudiaPool.filter(d=>(d===MAR||d===GIO)&&!S[d].M.includes("Claudia")))];
+    let clM=0;
+    for(const di of clMpool){ if(clM>=claudiaNeedM) break; if(tryAdd("Claudia",di,"M",1)) clM++; }
+    if(claudiaForcedM.length+clM<claudiaMcount) warnings.push(`Claudia: ${claudiaForcedM.length+clM}/${claudiaMcount} turni M`);
+  }
   const clMdays=claudiaPool.filter(di=>S[di].M.includes("Claudia"));
-  const clPpool=sh(claudiaPool.filter(di=>!clMdays.includes(di)));
-  let clP=0;
+  const clPpool=sh(claudiaPool.filter(di=>!clMdays.includes(di)&&!S[di].P.includes("Claudia")));
+  const claudiaForcedP=claudiaPool.filter(di=>S[di].P.includes("Claudia")).length;
+  let clP=claudiaForcedP;
   for(const di of clPpool){ if(clP>=3) break; if(tryAdd("Claudia",di,"P",1)) clP++; }
   if(clP<3) warnings.push(`Claudia: ${clP}/3 turni P`);
 
@@ -172,6 +178,12 @@ function simulate(weekStart, seed, sabato, constraints){
   function maryScore(di){ return Math.max(0,minCov(di,"M")-covM(di))+Math.max(0,minCov(di,"P")-covP(di)); }
   const mSorted=WDAYS.filter(di=>cof("Mary",di)!=="abs").sort((a,b)=>maryScore(b)-maryScore(a)||(rng()-0.5));
   let mD=0,mOM=false,mOP=false; const mAss=[];
+  // Conta giorni M già assegnati da pre-vincolo
+  for(const di of mSorted){
+    if(S[di].M.includes("Mary")&&S[di].PS.includes("Mary")){ mD++; mAss.push(di); }
+    else if(S[di].M.includes("Mary")&&!S[di].PS.includes("Mary")){ mOM=true; mAss.push(di); }
+    else if(S[di].P.includes("Mary")&&!S[di].M.includes("Mary")){ mOP=true; mAss.push(di); }
+  }
   for(const di of mSorted){
     if(mD>=3&&mOM&&mOP) break;
     if(mD<3&&!mAss.includes(di)&&!constraintBlocks(cof("Mary",di),"M")&&!constraintBlocks(cof("Mary",di),"PS")
@@ -185,21 +197,47 @@ function simulate(weekStart, seed, sabato, constraints){
   if(!mOM) warnings.push("Mary: giorno solo M mancante");
   if(!mOP) warnings.push("Mary: giorno solo P mancante");
 
+  // ── PRE-ASSEGNAZIONE VINCOLI FORZANTI (onM / onP) ───────────────
+  // Per ogni persona, i giorni con vincolo forzante vengono assegnati
+  // PRIMA di qualsiasi altra logica, con priorità assoluta.
+  for(const name of STAFF){
+    for(let di=0;di<5;di++){
+      const c=cof(name,di);
+      if(c==="onM" && !S[di].M.includes(name) && covM(di)<MAX){
+        S[di].M.push(name);
+      }
+      if(c==="onP" && !S[di].P.includes(name) && covPnorm(di)<MAX){
+        S[di].P.push(name);
+      }
+    }
+  }
+
   // ── GIORGIA ───────────────────────────────────────────────────────
-  assignN("Giorgia",WDAYS,"M",2,1);
-  const giorgiaMD=WDAYS.filter(di=>S[di].M.includes("Giorgia"));
-  const giorgiaPPool=sh(WDAYS.filter(di=>!giorgiaMD.includes(di)));
-  let giorgiaP=0;
-  for(const di of giorgiaPPool){ if(giorgiaP>=3) break; if(tryAdd("Giorgia",di,"P",1)) giorgiaP++; }
-  if(giorgiaP<3) warnings.push(`Giorgia: ${giorgiaP}/3 turni P`);
+  // Conta i giorni M già assegnati (da vincolo forzante o da logica precedente)
+  {
+    const forcedM=WDAYS.filter(di=>S[di].M.includes("Giorgia"));
+    const neededM=Math.max(0, 2-forcedM.length);
+    if(neededM>0) assignN("Giorgia", WDAYS.filter(di=>!S[di].M.includes("Giorgia")), "M", neededM, 1);
+    const giorgiaMD=WDAYS.filter(di=>S[di].M.includes("Giorgia"));
+    const giorgiaPPool=sh(WDAYS.filter(di=>!giorgiaMD.includes(di) && !S[di].P.includes("Giorgia")));
+    const forcedP=WDAYS.filter(di=>S[di].P.includes("Giorgia")).length;
+    let giorgiaP=forcedP;
+    for(const di of giorgiaPPool){ if(giorgiaP>=3) break; if(tryAdd("Giorgia",di,"P",1)) giorgiaP++; }
+    if(giorgiaP<3) warnings.push(`Giorgia: ${giorgiaP}/3 turni P`);
+  }
 
   // ── DIANE ─────────────────────────────────────────────────────────
-  assignN("Diane",WDAYS,"M",2,1);
-  const diMD=WDAYS.filter(di=>S[di].M.includes("Diane"));
-  const diPPool=sh(WDAYS.filter(di=>!diMD.includes(di)));
-  let diP=0;
-  for(const di of diPPool){ if(diP>=2) break; if(tryAdd("Diane",di,"P",1)) diP++; }
-  if(diP<2) warnings.push(`Diane: ${diP}/2 turni P`);
+  {
+    const forcedM=WDAYS.filter(di=>S[di].M.includes("Diane"));
+    const neededM=Math.max(0, 2-forcedM.length);
+    if(neededM>0) assignN("Diane", WDAYS.filter(di=>!S[di].M.includes("Diane")), "M", neededM, 1);
+    const diMD=WDAYS.filter(di=>S[di].M.includes("Diane"));
+    const diPPool=sh(WDAYS.filter(di=>!diMD.includes(di) && !S[di].P.includes("Diane")));
+    const forcedP=WDAYS.filter(di=>S[di].P.includes("Diane")).length;
+    let diP=forcedP;
+    for(const di of diPPool){ if(diP>=2) break; if(tryAdd("Diane",di,"P",1)) diP++; }
+    if(diP<2) warnings.push(`Diane: ${diP}/2 turni P`);
+  }
 
   // ── REPERIBILITÀ PS ───────────────────────────────────────────────
   const psElig=[
@@ -341,6 +379,7 @@ export default function App(){
   const [constraints,setConstraints]=useState({});
   const [showConstraints,setShowConstraints]=useState(false);
   const [showOre,setShowOre]=useState(false);
+  const [dirty,setDirty]=useState(false);
 
   const baseMonday=getMonday(new Date());
   const weekStart=new Date(baseMonday);
@@ -357,11 +396,13 @@ export default function App(){
       if(!Object.keys(next[name]||{}).length) delete next[name];
       return next;
     });
+    if(result) setDirty(true);
   }
-  function clearConstraints(){ setConstraints({}); }
+  function clearConstraints(){ setConstraints({}); if(result) setDirty(true); }
 
   function handleGenerate(){
     setComputing(true);
+    setDirty(false);
     setTimeout(()=>{
       const res=generateBest(weekStart,sabScelto,constraints);
       setResult(res); setComputing(false);
