@@ -346,11 +346,12 @@ function getMonday(date){
 }
 function formatDate(d){ return d.toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 
-function exportXLS(turni,weekStart,showOre,constraints,overrides){
+function exportXLS(turni,weekStart,showOre,constraints,cellEdits={}){
   // Carica SheetJS se non già presente
   function doExport(){
     const XLSX=window.XLSX;
-    const label=(p,day,shift)=>{ const k=`${p}|${day}|${shift}`; return overrides[k]!==undefined?overrides[k]:showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift); };
+    const label=(p,day,shift)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
+    const ck=(p,day)=>`${p}|${day}`;
 
     // Costruisci array di array per il foglio
     const dateRow=["Personale",...DAYS.map((d,i)=>{
@@ -363,6 +364,8 @@ function exportXLS(turni,weekStart,showOre,constraints,overrides){
         const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
         const cv=constraints?.[person]?.[di];
         if(cv==="abs") return "assente";
+        const customText=cellEdits[ck(person,day)];
+        if(customText!==undefined) return customText||"—";
         if(!shifts.length) return "—";
         return shifts.map(shift=>label(person,day,shift)).join(" | ");
       });
@@ -428,12 +431,9 @@ function exportJSON(turni,weekStart){
   a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.json`; a.click();
 }
 
-function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,overrides={}){
-  const label=(p,day,shift)=>{
-    const key=`${p}|${day}|${shift}`;
-    if(overrides[key]!==undefined) return overrides[key];
-    return showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
-  };
+function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits={}){
+  const label=(p,day,shift)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
+  const ck=(p,day)=>`${p}|${day}`;
   const shiftColors={
     Mattina:      {bg:"#FEF3C7",fg:"#92400E",border:"#F59E0B"},
     Pomeriggio:   {bg:"#DBEAFE",fg:"#1E40AF",border:"#60A5FA"},
@@ -454,15 +454,22 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,ove
     const cells=DAYS.map((day,di)=>{
       const shifts=Object.entries(turni[day]||{}).filter(([,arr])=>arr.includes(person)).map(([s])=>s);
       const cv=constraints?.[person]?.[di];
-      const tdBase=`background:${bg};text-align:center;vertical-align:top;padding:5px 2px;border:1px solid #CBD5E1;width:${colW}px;`;
+      const tdBase=`background:${bg};text-align:center;vertical-align:middle;padding:5px 2px;border:1px solid #CBD5E1;width:${colW}px;`;
       if(cv==="abs") return `<td style="${tdBase}background:#FEE2E2;"><span style="color:#EF4444;font-size:9px;font-weight:700;">assente</span></td>`;
+      const customText=cellEdits[ck(person,day)];
+      if(customText!==undefined){
+        // Cella con testo personalizzato: sfondo neutro o colore primo turno
+        const firstShift=shifts[0];
+        const c=firstShift&&!isCassaCell(person,day,firstShift)?(shiftColors[firstShift]||{bg:"#F1F5F9",fg:"#334155",border:"#94A3B8"}):{bg:"#EEF2FF",fg:"#4338CA",border:"#C7D2FE"};
+        const txt=customText||"—";
+        return `<td style="${tdBase}"><div style="display:flex;align-items:center;justify-content:center;background:${c.bg};border:1px solid ${c.border};border-radius:5px;margin:2px auto;width:${colW-12}px;min-height:28px;padding:3px 4px;box-sizing:border-box;"><span style="color:${c.fg};font-size:9px;font-weight:700;text-align:center;line-height:1.3;font-family:'Segoe UI',Arial,sans-serif;">${txt}</span></div></td>`;
+      }
       if(!shifts.length) return `<td style="${tdBase}"><span style="color:#CBD5E1;font-size:11px;">—</span></td>`;
       const badges=shifts.map(shift=>{
         const isCassa=isCassaCell(person,day,shift);
         const c=isCassa?{bg:"#E2E8F0",fg:"#475569",border:"#94A3B8"}:(shiftColors[shift]||{bg:"#F1F5F9",fg:"#334155",border:"#94A3B8"});
         const lbl=label(person,day,shift);
-        const lblWrapped=lbl.replace(/–|-/g,"‑<wbr/>").replace(/\s+/g,"<br/>");
-        return `<table style="display:inline-table;background:${c.bg};border:1px solid ${c.border};border-radius:5px;margin:2px auto;width:${colW-12}px;min-height:32px;"><tbody><tr><td style="color:${c.fg};font-size:9px;font-weight:700;text-align:center;vertical-align:middle;padding:4px 4px;line-height:1.35;word-break:break-word;">${lblWrapped}</td></tr></tbody></table>`;
+        return `<div style="display:flex;align-items:center;justify-content:center;background:${c.bg};border:1px solid ${c.border};border-radius:5px;margin:2px auto;width:${colW-12}px;min-height:28px;padding:3px 4px;box-sizing:border-box;"><span style="color:${c.fg};font-size:9px;font-weight:700;text-align:center;line-height:1.3;word-break:break-word;font-family:'Segoe UI',Arial,sans-serif;">${lbl}</span></div>`;
       }).join("");
       return `<td style="${tdBase}">${badges}</td>`;
     }).join("");
@@ -488,7 +495,7 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,ove
 
   return `<div style="width:${totalW}px;margin:0 auto;">
   <div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-    <span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Turni Ambulatorio</span>
+    <span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Gestione Turni</span>
     <span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span>
   </div>
   <table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;">
@@ -502,14 +509,9 @@ function buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,ove
   </div>`;
 }
 
-async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,overrides={}){
-  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,overrides);
-  // Larghezza canvas = A4 portrait ~794px + padding
+async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits={}){
+  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits);
   const canvasW=842;
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/>
-  <style>*{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#F8FAFC;padding:24px;width:${canvasW}px;font-family:'Segoe UI',Arial,sans-serif;}
-  </style></head><body>${tableHTML}</body></html>`;
 
   if(!window._h2c){
     await new Promise((res,rej)=>{
@@ -519,23 +521,26 @@ async function exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,ov
     });
     window._h2c=true;
   }
-  const iframe=document.createElement("iframe");
-  iframe.style.cssText=`position:fixed;left:-9999px;top:0;width:${canvasW}px;height:1200px;border:none;`;
-  document.body.appendChild(iframe);
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(html);
-  iframe.contentDocument.close();
-  await new Promise(r=>setTimeout(r,400));
-  const body=iframe.contentDocument.body;
-  const canvas=await window.html2canvas(body,{
+
+  // Render nel documento principale (non in un iframe) così html2canvas
+  // può accedere direttamente agli elementi e cattura testo e colori correttamente
+  const wrapper=document.createElement("div");
+  wrapper.style.cssText=`position:fixed;left:-9999px;top:0;width:${canvasW}px;background:#F8FAFC;padding:24px;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;`;
+  wrapper.innerHTML=tableHTML;
+  document.body.appendChild(wrapper);
+
+  // Breve attesa per il layout
+  await new Promise(r=>setTimeout(r,300));
+
+  const canvas=await window.html2canvas(wrapper,{
     scale:2.5,
     backgroundColor:"#F8FAFC",
     useCORS:true,
     width:canvasW,
-    height:body.scrollHeight+48,
+    height:wrapper.scrollHeight+48,
     windowWidth:canvasW,
   });
-  document.body.removeChild(iframe);
+  document.body.removeChild(wrapper);
   const a=document.createElement("a");
   a.href=canvas.toDataURL("image/jpeg",0.96);
   a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.jpg`;
@@ -575,22 +580,8 @@ export default function App(){
   const [showConstraints,setShowConstraints]=useState(false);
   const [showOre,setShowOre]=useState(true);
   const [dirty,setDirty]=useState(false);
-  const [overrides,setOverrides]=useState<Record<string,string>>({});
-  const [editingCell,setEditingCell]=useState<string|null>(null);
-
-  function getLabel(person:string,day:string,shift:string):string{
-    const key=`${person}|${day}|${shift}`;
-    if(overrides[key]!==undefined) return overrides[key];
-    return showOre ? cellLabelOre(person,day,shift) : cellLabel(person,day,shift);
-  }
-  function startEdit(key:string){ setEditingCell(key); }
-  function commitEdit(key:string,val:string){
-    const trimmed=val.slice(0,15);
-    const defaultVal=showOre ? cellLabelOre(...(key.split("|") as [string,string,string])) : cellLabel(...(key.split("|") as [string,string,string]));
-    if(trimmed===defaultVal||trimmed==="") setOverrides(p=>{const n={...p}; delete n[key]; return n;});
-    else setOverrides(p=>({...p,[key]:trimmed}));
-    setEditingCell(null);
-  }
+  const [cellEdits,setCellEdits]=useState({});      // "Person|Day" → testo custom
+  const [editingCell,setEditingCell]=useState(null); // "Person|Day" | null
 
   const baseMonday=getMonday(new Date());
   const weekStart=new Date(baseMonday);
@@ -614,12 +605,15 @@ export default function App(){
   function handleGenerate(){
     setComputing(true);
     setDirty(false);
-    setOverrides({});
+    setCellEdits({});
+    setEditingCell(null);
     setTimeout(()=>{
       const res=generateBest(weekStart,sabScelto,constraints);
       setResult(res); setComputing(false);
     },20);
   }
+
+  const cellKey=(person,day)=>`${person}|${day}`;
 
   function getShifts(p,day){
     if(!turni) return [];
@@ -656,7 +650,7 @@ export default function App(){
   }
 
   function printPDF(){
-    const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,overrides);
+    const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits);
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Turni ${formatDate(weekStart)}</title>
     <style>@page{size:A4 landscape;margin:10mm} body{font-family:'Segoe UI',Arial,sans-serif;background:#F8FAFC;padding:16px;}</style>
     </head><body>${tableHTML}<script>window.onload=()=>window.print();<\/script></body></html>`;
@@ -676,7 +670,7 @@ export default function App(){
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-              <h1 className="text-xl font-bold text-gray-800">📅 Turni Ambulatorio</h1>
+              <h1 className="text-xl font-bold text-gray-800">📅 Gestione Turni</h1>
               <p className="text-sm text-gray-500 mt-0.5">Settimana {formatDate(weekStart)} — {formatDate(weekEnd)}</p>
             </div>
             <div className="flex gap-2">
@@ -706,9 +700,9 @@ export default function App(){
               🕐 {showOre?"Mostra sigle":"Mostra orari"}
             </button>
             {turni && <>
-              <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints,overrides)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLSX</button>
+              <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints,cellEdits)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLSX</button>
               <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 PDF</button>
-              <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,overrides)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
+              <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
             </>}
           </div>
 
@@ -840,6 +834,9 @@ export default function App(){
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-auto">
+              <div className="px-4 pt-3 pb-1 text-xs text-gray-400 flex items-center gap-1">
+                <span>✏️</span><span>Clicca su qualsiasi cella per modificarne il testo (max 20 caratteri) — le modifiche vengono incluse nell'esportazione</span>
+              </div>
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-indigo-600 text-white">
@@ -860,33 +857,54 @@ export default function App(){
                       {DAYS.map((day,di)=>{
                         const shifts=getShifts(person,day);
                         const cv=constraints?.[person]?.[di];
+                        const ck=cellKey(person,day);
+                        const customText=cellEdits[ck];
+                        const isEditing=editingCell===ck;
+                        // Testo mostrato: se c'è override custom lo mostriamo, altrimenti label normale
+                        const defaultLabel=shifts.map(s=>showOre?cellLabelOre(person,day,s):cellLabel(person,day,s)).join(" · ");
+                        const displayText=customText!==undefined?customText:defaultLabel;
                         return (
                           <td key={day} className={`px-2 py-2 text-center border-r border-gray-100 min-w-[100px] ${cv==="abs"?"bg-red-50":""}`}>
                             {cv==="abs"
-                              ?<span className="text-xs text-red-300 font-medium">assente</span>
-                              :shifts.length===0
-                                ?<span className="text-gray-200">—</span>
-                                :<div className="flex flex-col gap-1 items-center">
-                                  {shifts.map(shift=>{
-                                    const key=`${person}|${day}|${shift}`;
-                                    const lbl=getLabel(person,day,shift);
-                                    const isEditing=editingCell===key;
-                                    const hasOverride=overrides[key]!==undefined;
-                                    const cellCls=`text-xs font-semibold px-1.5 py-0.5 rounded ${isCassaCell(person,day,shift)?"bg-gray-200 text-gray-600":SS[shift]?.cell||"bg-gray-100"}`;
-                                    return isEditing
-                                      ? <input key={shift} autoFocus
-                                          defaultValue={lbl} maxLength={15}
-                                          className={`${cellCls} w-24 text-center outline outline-2 outline-indigo-400`}
-                                          onBlur={e=>commitEdit(key,e.target.value)}
-                                          onKeyDown={e=>{ if(e.key==="Enter") commitEdit(key,(e.target as HTMLInputElement).value); if(e.key==="Escape"){setEditingCell(null);} }}
-                                        />
-                                      : <span key={shift} title="Clicca per modificare"
-                                          onClick={()=>startEdit(key)}
-                                          className={`${cellCls} cursor-pointer hover:ring-2 hover:ring-indigo-300 transition-all ${hasOverride?"ring-1 ring-amber-400":""}`}>
-                                          {lbl}
-                                        </span>;
-                                  })}
-                                </div>
+                              ? <span className="text-xs text-red-300 font-medium">assente</span>
+                              : isEditing
+                                ? <input
+                                    autoFocus
+                                    maxLength={20}
+                                    defaultValue={displayText}
+                                    className="w-full text-xs text-center border border-indigo-400 rounded px-1 py-0.5 outline-none ring-1 ring-indigo-300 bg-white"
+                                    onBlur={e=>{
+                                      const val=e.target.value.trim();
+                                      setCellEdits(prev=>({...prev,[ck]:val}));
+                                      setEditingCell(null);
+                                    }}
+                                    onKeyDown={e=>{
+                                      if(e.key==="Enter"||e.key==="Escape"){
+                                        if(e.key==="Enter"){ const val=e.target.value.trim(); setCellEdits(prev=>({...prev,[ck]:val})); }
+                                        setEditingCell(null);
+                                      }
+                                    }}
+                                  />
+                                : <div
+                                    className="cursor-pointer group relative"
+                                    title="Clicca per modificare (max 20 caratteri)"
+                                    onClick={()=>setEditingCell(ck)}
+                                  >
+                                    {shifts.length===0 && customText===undefined
+                                      ? <span className="text-gray-200 group-hover:text-gray-400 transition-colors">—</span>
+                                      : <div className="flex flex-col gap-1 items-center">
+                                          {customText!==undefined
+                                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 group-hover:border-indigo-400 transition-colors">{customText||<span className="italic text-gray-300">vuoto</span>}</span>
+                                            : shifts.map(shift=>(
+                                                <span key={shift} className={`text-xs font-semibold px-1.5 py-0.5 rounded group-hover:opacity-80 transition-opacity ${isCassaCell(person,day,shift)?"bg-gray-200 text-gray-600":SS[shift]?.cell||"bg-gray-100"}`}>
+                                                  {showOre ? cellLabelOre(person,day,shift) : cellLabel(person,day,shift)}
+                                                </span>
+                                              ))
+                                          }
+                                        </div>
+                                    }
+                                    <span className="absolute inset-0 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none ring-1 ring-inset ring-indigo-300"/>
+                                  </div>
                             }
                           </td>
                         );
@@ -922,19 +940,56 @@ export default function App(){
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Regole applicate</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-600">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Regole da applicare</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-600">
                 {[
-                  ["Claudia","Con sab: 1M+3P lun-ven + sab TU · Senza sab: 2M+3P lun-ven"],
-                  ["Consuelo","lun P · mar M · mer M+P-cassa · gio M-cassa · ven P-cassa · riposo solo sett. con sab · lun/mar → M+PS"],
-                  ["Diane","4gg lun-ven · 2M · max 2 pomeriggi · PS reperibilità max 1/sett"],
-                  ["Giorgia","6gg · sab TU · 2M+3P · PS reperibilità max 1/sett"],
-                  ["Giulia","solo lun P e ven P"],
-                  ["Mary","6gg · sab TU · 3gg M+PS · 1gg M · 1gg P"],
-                ].map(([name,rule])=>(
-                  <div key={name} className="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                    <span className="font-semibold text-indigo-700">{name}</span>
-                    <p className="mt-0.5 leading-relaxed">{rule}</p>
+                  ["Claudia",[
+                    "Settimana con sabato: 1 turno M + 3 turni P nei giorni lun–ven + Turno Unico sabato",
+                    "Settimana senza sabato: 2 turni M + 3 turni P nei giorni lun–ven",
+                    "I giorni M sono preferibilmente lun, mer o ven (mar e gio in seconda scelta)",
+                    "Ogni giorno lavora un solo turno (M oppure P, mai entrambi nello stesso giorno)",
+                    "Non assegnata a PS/reperibilità serale",
+                  ]],
+                  ["Consuelo",[
+                    "Turni fissi settimanali: lun P, mar M, mer M+P (cassa), gio M (cassa), ven P (cassa)",
+                    "Le celle 'cassa' (mer P, gio M, ven P) non contano nella copertura standard",
+                    "Nelle settimane in cui fa sabato: riposo compensativo il lunedì o il martedì (a rotazione)",
+                    "Nelle settimane con sabato: Turno Unico il sabato",
+                    "Può fare reperibilità PS (max 1/sett) solo il lun o il mar, mai nel giorno di riposo",
+                    "PS su lun o mar: se ha già P passa a M+PS; se ha già M aggiunge PS",
+                  ]],
+                  ["Diane",[
+                    "Lavora al massimo 4 giorni su lun–ven",
+                    "Esattamente 2 turni M nella settimana",
+                    "Massimo 2 pomeriggi (P o PS) nella settimana",
+                    "I pomeriggi non devono essere in giorni consecutivi",
+                    "Può fare reperibilità PS max 1 volta a settimana",
+                    "Non è assegnata al sabato",
+                  ]],
+                  ["Giorgia",[
+                    "Lavora 6 giorni: 5 giorni lun–ven + Turno Unico il sabato (fisso)",
+                    "Esattamente 2 turni M + 3 turni P nei giorni lun–ven",
+                    "M e P assegnati in giorni diversi (mai stesso giorno)",
+                    "Può fare reperibilità PS max 1 volta a settimana",
+                  ]],
+                  ["Giulia",[
+                    "Lavora solo 2 giorni fissi: lunedì P e venerdì P",
+                    "Non assegnata ad altri giorni né ad altri turni",
+                    "Non assegnata al sabato",
+                    "Non fa PS/reperibilità serale",
+                  ]],
+                  ["Mary",[
+                    "Lavora 6 giorni: 5 giorni lun–ven + Turno Unico il sabato (fisso)",
+                    "Schema lun–ven: esattamente 3 giorni M+PS (mattina + reperibilità serale), 1 giorno solo M, 1 giorno solo P",
+                    "Priorità ai giorni con carenza di copertura M o P nella scelta dei giorni M+PS",
+                    "M e P/PS sempre in giorni distinti (mai stesso giorno)",
+                  ]],
+                ].map(([name,rules])=>(
+                  <div key={name} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                    <span className="font-semibold text-indigo-700 block mb-1">{name}</span>
+                    <ul className="space-y-0.5">
+                      {rules.map((r,i)=><li key={i} className="flex gap-1.5"><span className="text-indigo-300 mt-px">•</span><span>{r}</span></li>)}
+                    </ul>
                   </div>
                 ))}
               </div>
