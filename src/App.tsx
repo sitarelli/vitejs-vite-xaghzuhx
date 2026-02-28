@@ -8,6 +8,47 @@ const MAX=3;
 const WDAYS=[LUN,MAR,MER,GIO,VEN];
 const N_ITER=20000;
 
+// ── FESTIVITÀ ─────────────────────────────────────────────────────
+// Formato "MM-DD" → { label, patrono? }
+const FESTIVITA: Record<string,{label:string,patrono?:boolean}> = {
+  "01-01": {label:"Capodanno"},
+  "01-06": {label:"Epifania"},
+  "04-25": {label:"Liberazione"},
+  "05-01": {label:"Festa del Lavoro"},
+  "06-02": {label:"Rep. Italiana"},
+  "08-15": {label:"Ferragosto"},
+  "09-29": {label:"S. Michele – Patrono", patrono:true},
+  "11-01": {label:"Ognissanti"},
+  "12-08": {label:"Immacolata"},
+  "12-25": {label:"Natale"},
+  "12-26": {label:"S. Stefano"},
+};
+// Pasqua e Pasquetta: calcolate dinamicamente
+function easterDate(year:number):[number,number]{
+  const a=year%19,b=Math.floor(year/100),c=year%100;
+  const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m=Math.floor((a+11*h+22*l)/451);
+  const month=Math.floor((h+l-7*m+114)/31);
+  const day=((h+l-7*m+114)%31)+1;
+  return [month,day];
+}
+function getFestivita(date:Date):{label:string,patrono?:boolean}|null{
+  const mm=String(date.getMonth()+1).padStart(2,"0");
+  const dd=String(date.getDate()).padStart(2,"0");
+  const key=`${mm}-${dd}`;
+  if(FESTIVITA[key]) return FESTIVITA[key];
+  // Pasqua e Pasquetta
+  const y=date.getFullYear();
+  const [em,ed]=easterDate(y);
+  const easter=new Date(y,em-1,ed);
+  const lunedi=new Date(y,em-1,ed+1);
+  if(date.toDateString()===easter.toDateString()) return {label:"Pasqua"};
+  if(date.toDateString()===lunedi.toDateString()) return {label:"Pasquetta"};
+  return null;
+}
+
 // ── REGOLE DI DEFAULT ─────────────────────────────────────────────
 export type Rules = {
   giulia: { days: number[] };           // giorni in cui Giulia lavora (P)
@@ -436,7 +477,7 @@ function exportJSON(turni:any,weekStart:Date){
   a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.json`; a.click();
 }
 
-function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={}){
+function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={},colFullDates:Date[]=[]){
   const label=(p:string,day:string,shift:string)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
   const ck=(p:string,day:string)=>`${p}|${day}`;
   const shiftColors:Record<string,any>={
@@ -448,8 +489,13 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
   const colW=82,nameW=90,totalW=nameW+colW*6;
   const thBase=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;`;
   const headers=DAYS.map((d,i)=>{
-    const wx=weather[i]?`<span style="font-size:14px;line-height:1;margin-right:4px;vertical-align:middle;">${weather[i]}</span>`:"";
-    return `<th style="${thBase}width:${colW}px;"><span style="display:inline-flex;align-items:center;justify-content:center;gap:3px;">${wx}<span>${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span></span></span></th>`;
+    const festa=colFullDates[i]?getFestivita(colFullDates[i]):null;
+    const isPatrono=festa?.patrono;
+    const bg=isPatrono?"#D97706":festa?"#DC2626":"#4F46E5";
+    const border=isPatrono?"#92400E":festa?"#991B1B":"#3730A3";
+    const wx=weather[i]?`<div style="font-size:14px;line-height:1;margin-bottom:3px;">${weather[i]}</div>`:"";
+    const festaLabel=festa?`<div style="font-size:8px;font-weight:800;margin-top:3px;background:${isPatrono?"#FDE68A":"#FECACA"};color:${isPatrono?"#78350F":"#7F1D1D"};padding:1px 4px;border-radius:4px;display:inline-block;">${festa.label}</div>`:"";
+    return `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:center;padding:8px 3px;border:1px solid ${border};background:${bg};width:${colW}px;">${wx}${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span>${festaLabel}</th>`;
   }).join("");
   const rows=STAFF.map((person,pi)=>{
     const bg=pi%2===0?"#FFFFFF":"#F1F5F9";
@@ -496,8 +542,8 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
   return `<div style="width:${totalW}px;margin:0;"><div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Disponibilità massaggiatrici Mirano</span><span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span></div><table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;"><thead><tr><th style="${hdrNameStyle}">Personale</th>${headers}</tr></thead><tbody>${rows}</tbody><tfoot>${footRows}</tfoot></table></div>`;
 }
 
-async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={}){
-  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather);
+async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={},colFullDates:Date[]=[]) {
+  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather,colFullDates);
   if(!(window as any)._h2c){
     await new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
     (window as any)._h2c=true;
@@ -816,7 +862,7 @@ export default function App(){
   }
 
   function printPDF(){
-    const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather);
+    const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather,colFullDates);
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Turni ${formatDate(weekStart)}</title><style>@page{size:A4 landscape;margin:10mm} body{font-family:'Segoe UI',Arial,sans-serif;background:#F8FAFC;padding:16px;}</style></head><body>${tableHTML}<script>window.onload=()=>window.print();<\/script></body></html>`;
     const w=window.open("","_blank");
     w!.document.write(html); w!.document.close();
@@ -824,6 +870,7 @@ export default function App(){
 
   const pct=result&&result.maxScore>0?Math.round(result.score/result.maxScore*100):0;
   const colDates=DAYS.map((_,i)=>{ const d=new Date(weekStart); d.setDate(d.getDate()+i); return d.getDate(); });
+  const colFullDates=DAYS.map((_,i)=>{ const d=new Date(weekStart); d.setDate(d.getDate()+i); return d; });
   const isReallyDirty=dirty||rulesDirty;
 
   return (
@@ -866,7 +913,7 @@ export default function App(){
             {turni && <>
               <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints,cellEdits)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLSX</button>
               <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 PDF</button>
-              <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
+              <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather,colFullDates)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
             </>}
           </div>
 
@@ -1008,17 +1055,19 @@ export default function App(){
                 <thead>
                   <tr className="bg-indigo-600 text-white">
                     <th className="text-left px-4 py-3 font-semibold w-32 rounded-tl-2xl">Personale</th>
-                    {DAYS.map((d,i)=>(
-                      <th key={d} className="px-3 py-3 font-semibold text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {weather[i]&&<span className="text-base leading-none">{weather[i]}</span>}
-                          <div>
-                            <div>{d}</div>
-                            <div className="text-xs font-normal opacity-75">{colDates[i]}</div>
-                          </div>
-                        </div>
-                      </th>
-                    ))}
+                    {DAYS.map((d,i)=>{
+                      const festa=getFestivita(colFullDates[i]);
+                      const isPatrono=festa?.patrono;
+                      const bgCol=isPatrono?"bg-amber-500":festa?"bg-red-500":"bg-indigo-600";
+                      return (
+                        <th key={d} className={`px-3 py-3 font-semibold text-center ${bgCol} text-white`}>
+                          {weather[i]&&<div className="text-base leading-none mb-0.5">{weather[i]}</div>}
+                          <div>{d}</div>
+                          <div className="text-xs font-normal opacity-75">{colDates[i]}</div>
+                          {festa&&<div className={`text-xs font-bold mt-0.5 px-1 py-0.5 rounded ${isPatrono?"bg-amber-300 text-amber-900":"bg-red-300 text-red-900"}`}>{festa.label}</div>}
+                        </th>
+                      );
+                    })}
                     <th className="px-3 py-3 font-semibold text-center rounded-tr-2xl">Tot</th>
                   </tr>
                 </thead>
