@@ -83,7 +83,7 @@ function simulate(weekStart:Date, seed:number, sabato:string, constraints:any, r
   let consueloSab:boolean;
   if(sabato==="Consuelo") consueloSab=true;
   else if(sabato==="Claudia") consueloSab=false;
-  else consueloSab=(weekIndex%2===0);
+  else consueloSab=(weekIndex%2===1);
 
   const warnings:string[]=[];
   const S=Array.from({length:6},()=>({M:[] as string[],P:[] as string[],PS:[] as string[],U:[] as string[]}));
