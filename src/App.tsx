@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const STAFF = ["Claudia","Consuelo","Diane","Giorgia","Giulia","Mary"];
 const DAYS  = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
@@ -436,7 +436,7 @@ function exportJSON(turni:any,weekStart:Date){
   a.download=`turni_${formatDate(weekStart).replace(/\//g,"-")}.json`; a.click();
 }
 
-function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={}){
+function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={}){
   const label=(p:string,day:string,shift:string)=>showOre?cellLabelOre(p,day,shift):cellLabel(p,day,shift);
   const ck=(p:string,day:string)=>`${p}|${day}`;
   const shiftColors:Record<string,any>={
@@ -447,7 +447,10 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
   };
   const colW=82,nameW=90,totalW=nameW+colW*6;
   const thBase=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;`;
-  const headers=DAYS.map((d,i)=>`<th style="${thBase}width:${colW}px;">${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span></th>`).join("");
+  const headers=DAYS.map((d,i)=>{
+    const wx=weather[i]?`<div style="font-size:14px;line-height:1;margin-bottom:2px;">${weather[i]}</div>`:"";
+    return `<th style="${thBase}width:${colW}px;">${wx}${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span></th>`;
+  }).join("");
   const rows=STAFF.map((person,pi)=>{
     const bg=pi%2===0?"#FFFFFF":"#F1F5F9";
     const cells=DAYS.map((day,di)=>{
@@ -493,8 +496,8 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
   return `<div style="width:${totalW}px;margin:0;"><div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Disponibilità massaggiatrici Mirano</span><span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span></div><table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;"><thead><tr><th style="${hdrNameStyle}">Personale</th>${headers}</tr></thead><tbody>${rows}</tbody><tfoot>${footRows}</tfoot></table></div>`;
 }
 
-async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={}){
-  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits);
+async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={}){
+  const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather);
   if(!(window as any)._h2c){
     await new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
     (window as any)._h2c=true;
@@ -718,6 +721,24 @@ export default function App(){
   const [editingCell,setEditingCell]=useState<string|null>(null);
   const [rules,setRulesState]=useState<Rules>(DEFAULT_RULES);
   const [rulesDirty,setRulesDirty]=useState(false);
+  const [weather,setWeather]=useState<Record<number,string>>({}); // di -> emoji
+
+  // Mirano VE coordinate
+  const LAT=45.4958, LON=12.1044;
+
+  function wmoToEmoji(code:number):string{
+    if(code===0) return "☀️";
+    if(code<=2) return "🌤️";
+    if(code===3) return "☁️";
+    if(code<=49) return "🌫️";
+    if(code<=59) return "🌦️";
+    if(code<=69) return "🌧️";
+    if(code<=79) return "🌨️";
+    if(code<=82) return "🌧️";
+    if(code<=84) return "🌨️";
+    if(code<=99) return "⛈️";
+    return "🌡️";
+  }
 
   function setRules(r:Rules){ setRulesState(r); if(result) setRulesDirty(true); }
 
@@ -725,6 +746,22 @@ export default function App(){
   const weekStart=new Date(baseMonday);
   weekStart.setDate(weekStart.getDate()+weekOffset*7);
   const weekEnd=new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+5);
+
+  useEffect(()=>{
+    setWeather({});
+    const startStr=weekStart.toISOString().slice(0,10);
+    const endStr=weekEnd.toISOString().slice(0,10);
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&daily=weathercode&timezone=Europe%2FRome&start_date=${startStr}&end_date=${endStr}`)
+      .then(r=>r.json())
+      .then(data=>{
+        const codes:number[]=data?.daily?.weathercode||[];
+        const map:Record<number,string>={};
+        codes.forEach((code,i)=>{ map[i]=wmoToEmoji(code); });
+        setWeather(map);
+      })
+      .catch(()=>{}); // silently fail — no weather shown
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[weekOffset]);
   const turni=result?.turni||null;
 
   const activeConstraints=Object.values(constraints).reduce((a:number,days:any)=>a+Object.values(days).filter((v:any)=>v).length,0);
@@ -779,7 +816,7 @@ export default function App(){
   }
 
   function printPDF(){
-    const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits);
+    const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather);
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Turni ${formatDate(weekStart)}</title><style>@page{size:A4 landscape;margin:10mm} body{font-family:'Segoe UI',Arial,sans-serif;background:#F8FAFC;padding:16px;}</style></head><body>${tableHTML}<script>window.onload=()=>window.print();<\/script></body></html>`;
     const w=window.open("","_blank");
     w!.document.write(html); w!.document.close();
@@ -829,7 +866,7 @@ export default function App(){
             {turni && <>
               <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints,cellEdits)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLSX</button>
               <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 PDF</button>
-              <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
+              <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
             </>}
           </div>
 
@@ -973,6 +1010,7 @@ export default function App(){
                     <th className="text-left px-4 py-3 font-semibold w-32 rounded-tl-2xl">Personale</th>
                     {DAYS.map((d,i)=>(
                       <th key={d} className="px-3 py-3 font-semibold text-center">
+                        {weather[i]&&<div className="text-base leading-none mb-0.5">{weather[i]}</div>}
                         <div>{d}</div>
                         <div className="text-xs font-normal opacity-75">{colDates[i]}</div>
                       </th>
