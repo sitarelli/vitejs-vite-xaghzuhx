@@ -445,7 +445,7 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
     PS:{bg:"#EDE9FE",fg:"#5B21B6",border:"#A78BFA"},
     "Turno Unico":{bg:"#DCFCE7",fg:"#166534",border:"#4ADE80"},
   };
-  const colW=82,nameW=90,totW=36,totalW=nameW+colW*6+totW;
+  const colW=82,nameW=90,totalW=nameW+colW*6;
   const thBase=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;`;
   const headers=DAYS.map((d,i)=>`<th style="${thBase}width:${colW}px;">${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span></th>`).join("");
   const rows=STAFF.map((person,pi)=>{
@@ -471,17 +471,26 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
       }).join("");
       return `<td style="${tdBase}">${badges}</td>`;
     }).join("");
-    const tot=DAYS.reduce((acc,day)=>{
-      const sh=Object.entries(turni[day]||{}).filter(([,arr])=>(arr as string[]).includes(person)).map(([s])=>s);
-      if(!sh.length) return acc;
-      if(sh.includes("Turno Unico")) return acc+1;
-      return sh.some(s=>["Mattina","PS","Pomeriggio"].includes(s))?acc+1:acc;
-    },0);
-    return `<tr><td style="background:${bg};font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#1E293B;padding:6px 8px;border:1px solid #CBD5E1;width:${nameW}px;font-size:11px;white-space:nowrap;">${person}</td>${cells}<td style="background:${bg};text-align:center;padding:6px 3px;border:1px solid #CBD5E1;width:${totW}px;"><span style="background:#EEF2FF;color:#4338CA;font-weight:700;padding:2px 5px;border-radius:10px;font-size:10px;font-family:'Segoe UI',Arial,sans-serif;">${tot}</span></td></tr>`;
+    return `<tr><td style="background:${bg};font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#1E293B;padding:6px 8px;border:1px solid #CBD5E1;width:${nameW}px;font-size:11px;white-space:nowrap;">${person}</td>${cells}</tr>`;
   }).join("");
+
+  // tfoot: n° Mattina e n° Pomeriggio
+  const footRows=[
+    {label:"n° Mattina",    fn:(day:string,di:number)=>(turni[day]?.["Mattina"]||[]).filter((s:string)=>!isCassaCell(s,day,"Mattina")).length, min:(di:number)=>minCov(di,"M")},
+    {label:"n° Pomeriggio", fn:(day:string,di:number)=>{ const pN=(turni[day]?.["Pomeriggio"]||[]).filter((s:string)=>!isCassaCell(s,day,"Pomeriggio")).length; const ps=(turni[day]?.["PS"]||[]).length; return pN+ps; }, min:(di:number)=>minCov(di,"P")},
+  ].map(({label:lbl,fn,min})=>{
+    const cells=DAYS.map((day,di)=>{
+      if(di===SAB) return `<td style="border:1px solid #E5E7EB;background:#F3F4F6;"></td>`;
+      const count=fn(day,di),m=min(di);
+      const bg=count<m?"#FEE2E2":count===MAX?"#DCFCE7":"#FEF9C3";
+      const fg=count<m?"#B91C1C":count===MAX?"#166534":"#854D0E";
+      return `<td style="text-align:center;padding:4px 2px;border:1px solid #E5E7EB;background:#F3F4F6;"><span style="background:${bg};color:${fg};font-weight:700;padding:2px 6px;border-radius:8px;font-size:10px;font-family:'Segoe UI',Arial,sans-serif;">${count}</span></td>`;
+    }).join("");
+    return `<tr><td style="padding:4px 8px;font-size:10px;font-weight:600;color:#6B7280;background:#F3F4F6;border:1px solid #E5E7EB;font-family:'Segoe UI',Arial,sans-serif;">${lbl}</td>${cells}</tr>`;
+  }).join("");
+
   const hdrNameStyle=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:left;padding:8px;border:1px solid #3730A3;background:#4F46E5;width:${nameW}px;`;
-  const hdrTotStyle=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:10px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;width:${totW}px;`;
-  return `<div style="width:${totalW}px;margin:0;"><div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Disponibilità massaggiatrici Mirano</span><span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span></div><table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;"><thead><tr><th style="${hdrNameStyle}">Personale</th>${headers}<th style="${hdrTotStyle}">Tot</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div style="width:${totalW}px;margin:0;"><div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Disponibilità massaggiatrici Mirano</span><span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span></div><table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;"><thead><tr><th style="${hdrNameStyle}">Personale</th>${headers}</tr></thead><tbody>${rows}</tbody><tfoot>${footRows}</tfoot></table></div>`;
 }
 
 async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={}){
