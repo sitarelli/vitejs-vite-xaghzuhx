@@ -237,8 +237,8 @@ function simulate(weekStart:Date, seed:number, sabato:string, constraints:any, r
       S[di].M.push("Mary"); S[di].PS.push("Mary"); mD++; mAss.push(di);
     }
   }
-  for(const di of mSorted){ if(mOM) break; if(!mAss.includes(di)&&!constraintBlocks(cof("Mary",di),"M")&&covM(di)<MAX&&!S[di].M.includes("Mary")){ S[di].M.push("Mary"); mOM=true; mAss.push(di); } }
-  for(const di of mSorted){ if(mOP) break; if(!mAss.includes(di)&&!constraintBlocks(cof("Mary",di),"P")&&covPnorm(di)<MAX&&!S[di].P.includes("Mary")){ S[di].P.push("Mary"); mOP=true; mAss.push(di); } }
+  for(const di of mSorted){ if(mOM) break; if(!mAss.includes(di)&&!constraintBlocks(cof("Mary",di),"M")&&covM(di)<MAX&&!S[di].M.includes("Mary")&&mAss.length<5){ S[di].M.push("Mary"); mOM=true; mAss.push(di); } }
+  for(const di of mSorted){ if(mOP) break; if(!mAss.includes(di)&&!constraintBlocks(cof("Mary",di),"P")&&covPnorm(di)<MAX&&!S[di].P.includes("Mary")&&mAss.length<5){ S[di].P.push("Mary"); mOP=true; mAss.push(di); } }
   if(mD<rules.mary.psGiorni) warnings.push(`Mary: ${mD}/${rules.mary.psGiorni} giorni M+PS`);
   if(!mOM) warnings.push("Mary: giorno solo M mancante");
   if(!mOP) warnings.push("Mary: giorno solo P mancante");
@@ -249,10 +249,11 @@ function simulate(weekStart:Date, seed:number, sabato:string, constraints:any, r
     const neededM=Math.max(0, rules.giorgia.mTurni-forcedM.length);
     if(neededM>0) assignN("Giorgia", WDAYS.filter(di=>!S[di].M.includes("Giorgia")), "M", neededM, 1);
     const giorgiaMD=WDAYS.filter(di=>S[di].M.includes("Giorgia"));
+    const giorgiaMaxP=Math.max(0, 5-giorgiaMD.length);
     const giorgiaPPool=sh(WDAYS.filter(di=>!giorgiaMD.includes(di) && !S[di].P.includes("Giorgia")));
     const forcedP=WDAYS.filter(di=>S[di].P.includes("Giorgia")).length;
     let giorgiaP=forcedP;
-    for(const di of giorgiaPPool){ if(giorgiaP>=rules.giorgia.pTurni) break; if(tryAdd("Giorgia",di,"P",1)) giorgiaP++; }
+    for(const di of giorgiaPPool){ if(giorgiaP>=Math.min(rules.giorgia.pTurni,giorgiaMaxP)) break; if(tryAdd("Giorgia",di,"P",1)) giorgiaP++; }
     if(giorgiaP<rules.giorgia.pTurni) warnings.push(`Giorgia: ${giorgiaP}/${rules.giorgia.pTurni} turni P`);
   }
 
@@ -296,6 +297,8 @@ function simulate(weekStart:Date, seed:number, sabato:string, constraints:any, r
       if(!days.includes(di)) continue;
       if(constraintBlocks(cof(name,di),"M")||constraintBlocks(cof(name,di),"PS")) continue;
       if(name==="Diane" && dianeConsecutivePom(di)) continue;
+      if(MAX_DAYS[name]&&workingDays(name)>=MAX_DAYS[name]) continue;
+      if(MAX_P[name]&&countPomeriggi(name)>=MAX_P[name]) continue;
       if(S[di].P.includes(name)&&!isCassaPerson(name,di,"P")&&!S[di].M.includes(name)&&covM(di)<MAX&&countPS(di)<1){
         S[di].P.splice(S[di].P.indexOf(name),1);
         S[di].M.push(name); S[di].PS.push(name); psUsed.add(name);
