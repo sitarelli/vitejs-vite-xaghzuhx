@@ -481,22 +481,23 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
   }).join("");
   const hdrNameStyle=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:left;padding:8px;border:1px solid #3730A3;background:#4F46E5;width:${nameW}px;`;
   const hdrTotStyle=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:10px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;width:${totW}px;`;
-  return `<div style="width:${totalW}px;margin:0 auto;"><div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Gestione Turni</span><span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span></div><table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;"><thead><tr><th style="${hdrNameStyle}">Personale</th>${headers}<th style="${hdrTotStyle}">Tot</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div style="width:${totalW}px;margin:0;"><div style="background:#4F46E5;border-radius:8px 8px 0 0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:13px;">📅 Disponibilità massaggiatrici Mirano</span><span style="font-family:'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.8);font-size:10px;">${formatDate(weekStart)} — ${formatDate(weekEnd)}</span></div><table style="width:${totalW}px;border-collapse:collapse;table-layout:fixed;"><thead><tr><th style="${hdrNameStyle}">Personale</th>${headers}<th style="${hdrTotStyle}">Tot</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={}){
   const tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits);
-  const canvasW=842;
   if(!(window as any)._h2c){
     await new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
     (window as any)._h2c=true;
   }
   const wrapper=document.createElement("div");
-  wrapper.style.cssText=`position:fixed;left:-9999px;top:0;width:${canvasW}px;background:#F8FAFC;padding:24px;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif;`;
+  wrapper.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:0;margin:0;display:inline-block;font-family:'Segoe UI',Arial,sans-serif;`;
   wrapper.innerHTML=tableHTML;
   document.body.appendChild(wrapper);
   await new Promise(r=>setTimeout(r,300));
-  const canvas=await (window as any).html2canvas(wrapper,{scale:2.5,backgroundColor:"#F8FAFC",useCORS:true,width:canvasW,height:wrapper.scrollHeight+48,windowWidth:canvasW});
+  const w=wrapper.scrollWidth;
+  const h=wrapper.scrollHeight;
+  const canvas=await (window as any).html2canvas(wrapper,{scale:2.5,backgroundColor:"#ffffff",useCORS:true,width:w,height:h,windowWidth:w+100});
   document.body.removeChild(wrapper);
   const a=document.createElement("a");
   a.href=canvas.toDataURL("image/jpeg",0.96);
@@ -787,7 +788,7 @@ export default function App(){
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-              <h1 className="text-xl font-bold text-gray-800">📅 Gestione Turni</h1>
+              <h1 className="text-xl font-bold text-gray-800">📅 Disponibilità massaggiatrici Mirano</h1>
               <p className="text-sm text-gray-500 mt-0.5">Settimana {formatDate(weekStart)} — {formatDate(weekEnd)}</p>
             </div>
             <div className="flex gap-2">
