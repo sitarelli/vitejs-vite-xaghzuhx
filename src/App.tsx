@@ -448,8 +448,8 @@ function buildTableHTML(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],
   const colW=82,nameW=90,totalW=nameW+colW*6;
   const thBase=`font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:white;font-size:11px;text-align:center;padding:8px 3px;border:1px solid #3730A3;background:#4F46E5;`;
   const headers=DAYS.map((d,i)=>{
-    const wx=weather[i]?`<div style="font-size:14px;line-height:1;margin-bottom:2px;">${weather[i]}</div>`:"";
-    return `<th style="${thBase}width:${colW}px;">${wx}${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span></th>`;
+    const wx=weather[i]?`<span style="font-size:14px;line-height:1;margin-right:4px;vertical-align:middle;">${weather[i]}</span>`:"";
+    return `<th style="${thBase}width:${colW}px;"><span style="display:inline-flex;align-items:center;justify-content:center;gap:3px;">${wx}<span>${d}<br/><span style="font-size:9px;font-weight:400;opacity:.8;">${colDates[i]}</span></span></span></th>`;
   }).join("");
   const rows=STAFF.map((person,pi)=>{
     const bg=pi%2===0?"#FFFFFF":"#F1F5F9";
@@ -1010,9 +1010,13 @@ export default function App(){
                     <th className="text-left px-4 py-3 font-semibold w-32 rounded-tl-2xl">Personale</th>
                     {DAYS.map((d,i)=>(
                       <th key={d} className="px-3 py-3 font-semibold text-center">
-                        {weather[i]&&<div className="text-base leading-none mb-0.5">{weather[i]}</div>}
-                        <div>{d}</div>
-                        <div className="text-xs font-normal opacity-75">{colDates[i]}</div>
+                        <div className="flex items-center justify-center gap-1">
+                          {weather[i]&&<span className="text-base leading-none">{weather[i]}</span>}
+                          <div>
+                            <div>{d}</div>
+                            <div className="text-xs font-normal opacity-75">{colDates[i]}</div>
+                          </div>
+                        </div>
                       </th>
                     ))}
                     <th className="px-3 py-3 font-semibold text-center rounded-tr-2xl">Tot</th>
