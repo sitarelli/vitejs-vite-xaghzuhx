@@ -575,6 +575,12 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     const hh=lum.toString(16).padStart(2,"0");
     return `#${hh}${hh}${hh}`;
   };
+  // Force row/cell backgrounds to white: #FFFFFF, #F1F5F9 (alt rows), #F3F4F6 (tfoot), #FEE2E2 (absent)
+  const rowBgWhitelist=new Set(["ffffff","f1f5f9","f3f4f6","fee2e2"]);
+  tableHTML=tableHTML.replace(/background:(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3})/g,(_m,hex)=>{
+    if(rowBgWhitelist.has(hex.replace("#","").toLowerCase())) return "background:#ffffff";
+    return `background:${hex}`;
+  });
   tableHTML=tableHTML.replace(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?=[;'"\s)])/g,(_,hex)=>colorToGray(hex));
   // Remove emoji weather icons for clean print
   tableHTML=tableHTML.replace(/<div style="font-size:14px;line-height:1;margin-bottom:3px;">[^<]*<\/div>/g,"");
