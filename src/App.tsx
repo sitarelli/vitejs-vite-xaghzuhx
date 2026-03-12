@@ -565,8 +565,7 @@ async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[]
 
 async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={},colFullDates:Date[]=[]) {
   let tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather,colFullDates);
-  // Convert all colors to grayscale by replacing color values in inline styles
-  // Replace background colors with grayscale equivalents
+  // Convert hex colors to grayscale
   const colorToGray=(hex:string):string=>{
     const h=hex.replace("#","");
     let r=0,g=0,b=0;
@@ -576,9 +575,8 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     const hh=lum.toString(16).padStart(2,"0");
     return `#${hh}${hh}${hh}`;
   };
-  // Replace all hex colors in inline styles with grayscale
   tableHTML=tableHTML.replace(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?=[;'"\s)])/g,(_,hex)=>colorToGray(hex));
-  // Also remove emoji weather icons for clean print
+  // Remove emoji weather icons for clean print
   tableHTML=tableHTML.replace(/<div style="font-size:14px;line-height:1;margin-bottom:3px;">[^<]*<\/div>/g,"");
 
   if(!(window as any)._h2c){
@@ -586,42 +584,56 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     (window as any)._h2c=true;
   }
 
-  // A4 portrait: 210mm × 297mm at 150dpi → 1240 × 1754px content area
-  // We render the table scaled to fit A4 width (210mm = ~794px at 96dpi)
-  const A4_W=794; // px at 96dpi for A4 width
-  const A4_H=1123; // px at 96dpi for A4 height
+  // A4 landscape at 150dpi: 297mm × 210mm → 1754 × 1240px
+  // At 96dpi (screen): 1123px × 794px
+  const A4_W=1123; // landscape width (px at 96dpi)
+  const A4_H=794;  // landscape height (px at 96dpi)
+  const PAD=16;
 
+  // Step 1: render table offscreen at natural size to measure it
+  const probe=document.createElement("div");
+  probe.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:0;margin:0;display:inline-block;font-family:'Segoe UI',Arial,sans-serif;`;
+  probe.innerHTML=tableHTML;
+  document.body.appendChild(probe);
+  await new Promise(r=>setTimeout(r,200));
+  const naturalW=probe.scrollWidth;
+  const naturalH=probe.scrollHeight;
+  document.body.removeChild(probe);
+
+  // Step 2: compute uniform scale to fill A4 landscape (use the tighter axis)
+  const scaleW=(A4_W-PAD*2)/naturalW;
+  const scaleH=(A4_H-PAD*2)/naturalH;
+  const scale=Math.min(scaleW,scaleH);
+
+  const scaledW=Math.round(naturalW*scale);
+  const scaledH=Math.round(naturalH*scale);
+  // Center on A4 canvas
+  const offsetX=Math.floor((A4_W-scaledW)/2);
+  const offsetY=Math.floor((A4_H-scaledH)/2);
+
+  // Step 3: render at 2× resolution for quality (final image = A4_W*2 × A4_H*2)
+  const RENDER_SCALE=2;
   const wrapper=document.createElement("div");
-  wrapper.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:12px;margin:0;width:${A4_W}px;min-height:${A4_H}px;font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box;`;
-  // Scale table to fit A4 width using transform
-  const innerDiv=document.createElement("div");
-  innerDiv.style.cssText=`transform-origin:top left;`;
-  innerDiv.innerHTML=tableHTML;
-  wrapper.appendChild(innerDiv);
+  wrapper.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:0;margin:0;font-family:'Segoe UI',Arial,sans-serif;width:${naturalW}px;`;
+  wrapper.innerHTML=tableHTML;
   document.body.appendChild(wrapper);
-  await new Promise(r=>setTimeout(r,300));
-  // Calculate scale to fit content width into A4 width
-  const contentW=innerDiv.scrollWidth;
-  const scale=Math.min(1,(A4_W-24)/contentW);
-  innerDiv.style.transform=`scale(${scale})`;
-  innerDiv.style.width=`${contentW}px`;
-  wrapper.style.height=`${Math.max(A4_H, innerDiv.scrollHeight*scale+24)}px`;
-  await new Promise(r=>setTimeout(r,100));
-
-  const canvas=await (window as any).html2canvas(wrapper,{scale:2,backgroundColor:"#ffffff",useCORS:true,width:A4_W,height:Math.max(A4_H, Math.ceil(innerDiv.scrollHeight*scale)+24),windowWidth:A4_W+100});
+  await new Promise(r=>setTimeout(r,200));
+  const rawCanvas=await (window as any).html2canvas(wrapper,{scale:scale*RENDER_SCALE,backgroundColor:"#ffffff",useCORS:true,width:naturalW,height:naturalH,windowWidth:naturalW+100});
   document.body.removeChild(wrapper);
 
-  // Convert to grayscale using canvas filter
-  const grayCanvas=document.createElement("canvas");
-  grayCanvas.width=canvas.width;
-  grayCanvas.height=canvas.height;
-  const ctx=grayCanvas.getContext("2d")!;
+  // Step 4: composite onto A4-sized white canvas
+  const outCanvas=document.createElement("canvas");
+  outCanvas.width=A4_W*RENDER_SCALE;
+  outCanvas.height=A4_H*RENDER_SCALE;
+  const ctx=outCanvas.getContext("2d")!;
+  ctx.fillStyle="#ffffff";
+  ctx.fillRect(0,0,outCanvas.width,outCanvas.height);
   ctx.filter="grayscale(100%)";
-  ctx.drawImage(canvas,0,0);
+  ctx.drawImage(rawCanvas, offsetX*RENDER_SCALE, offsetY*RENDER_SCALE);
 
   const a=document.createElement("a");
-  a.href=grayCanvas.toDataURL("image/jpeg",0.93);
-  a.download=`turni_print_${formatDate(weekStart).replace(/\//g,"-")}.jpg`;
+  a.href=outCanvas.toDataURL("image/jpeg",0.95);
+  a.download=`turni_stampa_${formatDate(weekStart).replace(/\//g,"-")}.jpg`;
   a.click();
 }
 
