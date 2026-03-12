@@ -563,6 +563,68 @@ async function exportJPG(turni:any,weekStart:Date,weekEnd:Date,colDates:number[]
   a.click();
 }
 
+async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:number[],showOre:boolean,constraints:any,cellEdits:Record<string,string>={},weather:Record<number,string>={},colFullDates:Date[]=[]) {
+  let tableHTML=buildTableHTML(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather,colFullDates);
+  // Convert all colors to grayscale by replacing color values in inline styles
+  // Replace background colors with grayscale equivalents
+  const colorToGray=(hex:string):string=>{
+    const h=hex.replace("#","");
+    let r=0,g=0,b=0;
+    if(h.length===3){ r=parseInt(h[0]+h[0],16); g=parseInt(h[1]+h[1],16); b=parseInt(h[2]+h[2],16); }
+    else if(h.length===6){ r=parseInt(h.slice(0,2),16); g=parseInt(h.slice(2,4),16); b=parseInt(h.slice(4,6),16); }
+    const lum=Math.round(0.299*r+0.587*g+0.114*b);
+    const hh=lum.toString(16).padStart(2,"0");
+    return `#${hh}${hh}${hh}`;
+  };
+  // Replace all hex colors in inline styles with grayscale
+  tableHTML=tableHTML.replace(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?=[;'"\s)])/g,(_,hex)=>colorToGray(hex));
+  // Also remove emoji weather icons for clean print
+  tableHTML=tableHTML.replace(/<div style="font-size:14px;line-height:1;margin-bottom:3px;">[^<]*<\/div>/g,"");
+
+  if(!(window as any)._h2c){
+    await new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
+    (window as any)._h2c=true;
+  }
+
+  // A4 portrait: 210mm × 297mm at 150dpi → 1240 × 1754px content area
+  // We render the table scaled to fit A4 width (210mm = ~794px at 96dpi)
+  const A4_W=794; // px at 96dpi for A4 width
+  const A4_H=1123; // px at 96dpi for A4 height
+
+  const wrapper=document.createElement("div");
+  wrapper.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:12px;margin:0;width:${A4_W}px;min-height:${A4_H}px;font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box;`;
+  // Scale table to fit A4 width using transform
+  const innerDiv=document.createElement("div");
+  innerDiv.style.cssText=`transform-origin:top left;`;
+  innerDiv.innerHTML=tableHTML;
+  wrapper.appendChild(innerDiv);
+  document.body.appendChild(wrapper);
+  await new Promise(r=>setTimeout(r,300));
+  // Calculate scale to fit content width into A4 width
+  const contentW=innerDiv.scrollWidth;
+  const scale=Math.min(1,(A4_W-24)/contentW);
+  innerDiv.style.transform=`scale(${scale})`;
+  innerDiv.style.width=`${contentW}px`;
+  wrapper.style.height=`${Math.max(A4_H, innerDiv.scrollHeight*scale+24)}px`;
+  await new Promise(r=>setTimeout(r,100));
+
+  const canvas=await (window as any).html2canvas(wrapper,{scale:2,backgroundColor:"#ffffff",useCORS:true,width:A4_W,height:Math.max(A4_H, Math.ceil(innerDiv.scrollHeight*scale)+24),windowWidth:A4_W+100});
+  document.body.removeChild(wrapper);
+
+  // Convert to grayscale using canvas filter
+  const grayCanvas=document.createElement("canvas");
+  grayCanvas.width=canvas.width;
+  grayCanvas.height=canvas.height;
+  const ctx=grayCanvas.getContext("2d")!;
+  ctx.filter="grayscale(100%)";
+  ctx.drawImage(canvas,0,0);
+
+  const a=document.createElement("a");
+  a.href=grayCanvas.toDataURL("image/jpeg",0.93);
+  a.download=`turni_print_${formatDate(weekStart).replace(/\//g,"-")}.jpg`;
+  a.click();
+}
+
 const SS:Record<string,{cell:string,badge:string}>={
   Mattina:       {cell:"bg-amber-100 text-amber-800",   badge:"bg-amber-200 text-amber-900"},
   Pomeriggio:    {cell:"bg-blue-100 text-blue-800",     badge:"bg-blue-200 text-blue-900"},
@@ -914,6 +976,7 @@ export default function App(){
               <button onClick={()=>exportXLS(turni,weekStart,showOre,constraints,cellEdits)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm">⬇ XLSX</button>
               <button onClick={printPDF} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 PDF</button>
               <button onClick={()=>exportJPG(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather,colFullDates)} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium shadow-sm">🖼 JPG</button>
+              <button onClick={()=>exportJPGPrint(turni,weekStart,weekEnd,colDates,showOre,constraints,cellEdits,weather,colFullDates)} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium shadow-sm">🖨 Stampa</button>
             </>}
           </div>
 
