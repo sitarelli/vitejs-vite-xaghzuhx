@@ -669,7 +669,7 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
   wrapper.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:0;margin:0;font-family:'Segoe UI',Arial,sans-serif;width:${naturalW}px;`;
   // Inject a <style> block to force all table borders to exactly 1.5px solid black
   // This overrides any inline border that survives collapse resolution
-  const printStyle=`<style>table{border-collapse:collapse!important;border:none!important;}table td,table th{border:1px solid #000000!important;}div.print-outer{outline:1px solid #000000;}</style>`;
+  const printStyle=`<style>table{border-collapse:collapse!important;border:none!important;}table td,table th{border:1px solid #000000!important;}div.print-outer{border:2px solid #000000!important;display:inline-block;}</style>`;
   wrapper.innerHTML=printStyle+tableHTML;
   document.body.appendChild(wrapper);
   await new Promise(r=>setTimeout(r,200));
