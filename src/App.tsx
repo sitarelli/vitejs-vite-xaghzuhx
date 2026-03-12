@@ -575,22 +575,42 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     const hh=lum.toString(16).padStart(2,"0");
     return `#${hh}${hh}${hh}`;
   };
-  // Force ALL backgrounds to white except the dark header bar and column headers
-  // This covers: row alternating bg, shift badge bg (Mattina/Pomeriggio/PS/Unico/cassa/custom),
-  // footer badge circles (green/yellow/red), absent cell bg
+  // ── 1. Title bar: white bg, black text, keep content ───────────
+  tableHTML=tableHTML.replace(
+    /(<div style="background:#4F46E5;border-radius:8px 8px 0 0;[^"]*">)([\s\S]*?)(<\/div>)/,
+    (_m:string,_s:string,inner:string)=>{
+      const fixed=inner.replace(/color:white/g,"color:#111111").replace(/color:rgba\([^)]*\)/g,"color:#555555");
+      return `<div style="background:#ffffff;border-radius:0;border:1px solid #cccccc;border-bottom:none;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">${fixed}</div>`;
+    }
+  );
+  // ── 2. Header <th> day cells: white bg, black text, keep weather emoji ─
+  tableHTML=tableHTML.replace(/<th style="([^"]*background:#(?:4F46E5|D97706|DC2626)[^"]*)">([\s\S]*?)<\/th>/g,(_m:string,_style:string,inner:string)=>{
+    const fixedInner=inner
+      .replace(/color:white/g,"color:#111111")
+      .replace(/color:rgba\([^)]*\)/g,"color:#555555")
+      .replace(/<div style="[^"]*background:#(?:FDE68A|FECACA)[^"]*color:#[^"]*">/g,
+        '<div style="font-size:8px;font-weight:800;margin-top:3px;background:#eeeeee;color:#222222;padding:1px 4px;border-radius:4px;display:inline-block;">');
+    return `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:center;padding:8px 3px;border:1px solid #bbbbbb;background:#ffffff;">${fixedInner}</th>`;
+  });
+  // ── 3. "Personale" th ───────────────────────────────────────────
+  tableHTML=tableHTML.replace(
+    /<th style="[^"]*background:#4F46E5[^"]*">Personale<\/th>/,
+    `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:left;padding:8px;border:1px solid #bbbbbb;background:#ffffff;">Personale</th>`
+  );
+  // ── 4. All light backgrounds → white ────────────────────────────
   const bgWhitelist=new Set([
-    "ffffff","f1f5f9","f3f4f6",           // row backgrounds
-    "fee2e2","fef3c7","dbeafe","ede9fe",   // absent + shift badges
-    "dcfce7","fef9c3","e2e8f0","f1f5f9",   // shift badges + cassa
-    "eef2ff","94a3b8","c7d2fe",            // custom edit badge
+    "ffffff","f1f5f9","f3f4f6",
+    "fee2e2","fef3c7","dbeafe","ede9fe",
+    "dcfce7","fef9c3","e2e8f0",
+    "eef2ff","c7d2fe",
   ]);
-  tableHTML=tableHTML.replace(/background:(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3})/g,(_m,hex)=>{
+  tableHTML=tableHTML.replace(/background:(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3})/g,(_m:string,hex:string)=>{
     if(bgWhitelist.has(hex.replace("#","").toLowerCase())) return "background:#ffffff";
     return `background:${hex}`;
   });
-  tableHTML=tableHTML.replace(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?=[;'"\s)])/g,(_,hex)=>colorToGray(hex));
-  // Remove emoji weather icons for clean print
-  tableHTML=tableHTML.replace(/<div style="font-size:14px;line-height:1;margin-bottom:3px;">[^<]*<\/div>/g,"");
+  // ── 5. All remaining hex colors → grayscale ─────────────────────
+  tableHTML=tableHTML.replace(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?=[;'"\s)])/g,(_:string,hex:string)=>colorToGray(hex));
+  // Weather emoji divs are preserved (no strip)
 
   if(!(window as any)._h2c){
     await new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
