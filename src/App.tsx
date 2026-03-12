@@ -580,7 +580,7 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     /(<div style="background:#4F46E5;border-radius:8px 8px 0 0;[^"]*">)([\s\S]*?)(<\/div>)/,
     (_m:string,_s:string,inner:string)=>{
       const fixed=inner.replace(/color:white/g,"color:#111111").replace(/color:rgba\([^)]*\)/g,"color:#555555");
-      return `<div style="background:#ffffff;border-radius:0;border:1px solid #cccccc;border-bottom:none;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">${fixed}</div>`;
+      return `<div style="background:#ffffff;border-radius:0;border:2px solid #000000;border-bottom:none;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">${fixed}</div>`;
     }
   );
   // ── 2. Header <th> day cells: white bg, black text, keep weather emoji ─
@@ -590,12 +590,12 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
       .replace(/color:rgba\([^)]*\)/g,"color:#555555")
       .replace(/<div style="[^"]*background:#(?:FDE68A|FECACA)[^"]*color:#[^"]*">/g,
         '<div style="font-size:8px;font-weight:800;margin-top:3px;background:#eeeeee;color:#222222;padding:1px 4px;border-radius:4px;display:inline-block;">');
-    return `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:center;padding:8px 3px;border:1px solid #bbbbbb;background:#ffffff;">${fixedInner}</th>`;
+    return `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:center;padding:8px 3px;border:2px solid #000000;background:#ffffff;">${fixedInner}</th>`;
   });
   // ── 3. "Personale" th ───────────────────────────────────────────
   tableHTML=tableHTML.replace(
     /<th style="[^"]*background:#4F46E5[^"]*">Personale<\/th>/,
-    `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:left;padding:8px;border:1px solid #bbbbbb;background:#ffffff;">Personale</th>`
+    `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:left;padding:8px;border:2px solid #000000;background:#ffffff;">Personale</th>`
   );
   // ── 4. All light backgrounds → white ────────────────────────────
   const bgWhitelist=new Set([
@@ -610,6 +610,11 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
   });
   // ── 5. All remaining hex colors → grayscale ─────────────────────
   tableHTML=tableHTML.replace(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?=[;'"\s)])/g,(_:string,hex:string)=>colorToGray(hex));
+  // ── 6. Make all borders thick black for print readability ───────
+  // Replace any border shorthand: e.g. border:1px solid #xxx  or  border:2px solid #xxx
+  tableHTML=tableHTML.replace(/border:(\d+)px solid #[0-9a-fA-F]{3,6}/g,"border:2px solid #000000");
+  // Also fix border in title bar div
+  tableHTML=tableHTML.replace(/border:1px solid #cccccc/g,"border:2px solid #000000");
   // Weather emoji divs are preserved (no strip)
 
   if(!(window as any)._h2c){
