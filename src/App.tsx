@@ -575,8 +575,6 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     const hh=lum.toString(16).padStart(2,"0");
     return `#${hh}${hh}${hh}`;
   };
-  // ── 0. Add print-outer class to outermost div for outline trick ──
-  tableHTML=tableHTML.replace('<div style="width:','<div class="print-outer" style="width:');
   // ── 1. Title bar: white bg, black text, keep content ───────────
   tableHTML=tableHTML.replace(
     /(<div style="background:#4F46E5;border-radius:8px 8px 0 0;[^"]*">)([\s\S]*?)(<\/div>)/,
@@ -640,7 +638,7 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
   // At 96dpi (screen): 1123px × 794px
   const A4_W=1123; // landscape width (px at 96dpi)
   const A4_H=794;  // landscape height (px at 96dpi)
-  const PAD=16;
+  const PAD=24;
 
   // Step 1: render table offscreen at natural size to measure it
   const probe=document.createElement("div");
@@ -649,7 +647,7 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
   document.body.appendChild(probe);
   await new Promise(r=>setTimeout(r,200));
   const naturalW=probe.scrollWidth;
-  const naturalH=probe.scrollHeight;
+  const naturalH=probe.scrollHeight+8; // +8px safety margin to avoid bottom clip
   document.body.removeChild(probe);
 
   // Step 2: compute uniform scale to fill A4 landscape (use the tighter axis)
@@ -669,7 +667,7 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
   wrapper.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:0;margin:0;font-family:'Segoe UI',Arial,sans-serif;width:${naturalW}px;`;
   // Inject a <style> block to force all table borders to exactly 1.5px solid black
   // This overrides any inline border that survives collapse resolution
-  const printStyle=`<style>table{border-collapse:collapse!important;border:none!important;}table td,table th{border:1px solid #000000!important;}div.print-outer{border:2px solid #000000!important;display:inline-block;}</style>`;
+  const printStyle=`<style>table{border-collapse:collapse!important;border-spacing:0!important;border:1.5px solid #000000!important;}table td,table th{border:1.5px solid #000000!important;}</style>`;
   wrapper.innerHTML=printStyle+tableHTML;
   document.body.appendChild(wrapper);
   await new Promise(r=>setTimeout(r,200));
