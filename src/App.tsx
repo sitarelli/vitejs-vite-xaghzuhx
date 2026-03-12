@@ -575,12 +575,14 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     const hh=lum.toString(16).padStart(2,"0");
     return `#${hh}${hh}${hh}`;
   };
+  // ── 0. Add print-outer class to outermost div for outline trick ──
+  tableHTML=tableHTML.replace('<div style="width:','<div class="print-outer" style="width:');
   // ── 1. Title bar: white bg, black text, keep content ───────────
   tableHTML=tableHTML.replace(
     /(<div style="background:#4F46E5;border-radius:8px 8px 0 0;[^"]*">)([\s\S]*?)(<\/div>)/,
     (_m:string,_s:string,inner:string)=>{
       const fixed=inner.replace(/color:white/g,"color:#111111").replace(/color:rgba\([^)]*\)/g,"color:#555555");
-      return `<div style="background:#ffffff;border-radius:0;border:1.5px solid #000000;border-bottom:none;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">${fixed}</div>`;
+      return `<div style="background:#ffffff;border-radius:0;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">${fixed}</div>`;
     }
   );
   // ── 2. Header <th> day cells: white bg, black text, keep weather emoji ─
@@ -590,12 +592,12 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
       .replace(/color:rgba\([^)]*\)/g,"color:#555555")
       .replace(/<div style="[^"]*background:#(?:FDE68A|FECACA)[^"]*color:#[^"]*">/g,
         '<div style="font-size:8px;font-weight:800;margin-top:3px;background:#eeeeee;color:#222222;padding:1px 4px;border-radius:4px;display:inline-block;">');
-    return `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:center;padding:8px 3px;border:1.5px solid #000000;background:#ffffff;">${fixedInner}</th>`;
+    return `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:center;padding:8px 3px;background:#ffffff;">${fixedInner}</th>`;
   });
   // ── 3. "Personale" th ───────────────────────────────────────────
   tableHTML=tableHTML.replace(
     /<th style="[^"]*background:#4F46E5[^"]*">Personale<\/th>/,
-    `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:left;padding:8px;border:1.5px solid #000000;background:#ffffff;">Personale</th>`
+    `<th style="font-family:'Segoe UI',Arial,sans-serif;font-weight:700;color:#111111;font-size:11px;text-align:left;padding:8px;background:#ffffff;">Personale</th>`
   );
   // ── 4. All light backgrounds → white ────────────────────────────
   const bgWhitelist=new Set([
@@ -615,18 +617,18 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
   tableHTML=tableHTML.replace(/border(?:-(?:top|right|bottom|left))?:(\d+(?:\.\d+)?)px solid #[0-9a-fA-F]{3,6}/g,
     (_m:string, _w:string, offset:number, str:string) => {
       const prop = str.slice(offset).match(/^(border(?:-(?:top|right|bottom|left))?)/)?.[1] || "border";
-      return `${prop}:1.5px solid #000000`;
+      return `${prop}:1px solid #000000`;
     }
   );
   // Also catch any leftover border shorthand that went through grayscale → #000000 already
   tableHTML=tableHTML.replace(/border(?:-(?:top|right|bottom|left))?:(\d+(?:\.\d+)?)px solid #000000/g,
     (_m:string, _w:string, offset:number, str:string) => {
       const prop = str.slice(offset).match(/^(border(?:-(?:top|right|bottom|left))?)/)?.[1] || "border";
-      return `${prop}:1.5px solid #000000`;
+      return `${prop}:1px solid #000000`;
     }
   );
   // Harden the outer wrapper border too
-  tableHTML=tableHTML.replace(/border:\d+(?:\.\d+)?px solid #(?:cccccc|000000);border-bottom:none/g,"border:1.5px solid #000000;border-bottom:none");
+  tableHTML=tableHTML.replace(/border:\d+(?:\.\d+)?px solid #(?:cccccc|000000);border-bottom:none/g,"border:none");
   // Weather emoji divs are preserved (no strip)
 
   if(!(window as any)._h2c){
@@ -667,7 +669,7 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
   wrapper.style.cssText=`position:fixed;left:-9999px;top:0;background:white;padding:0;margin:0;font-family:'Segoe UI',Arial,sans-serif;width:${naturalW}px;`;
   // Inject a <style> block to force all table borders to exactly 1.5px solid black
   // This overrides any inline border that survives collapse resolution
-  const printStyle=`<style>table{border-collapse:collapse!important;}table td,table th{border:1.5px solid #000000!important;}</style>`;
+  const printStyle=`<style>table{border-collapse:collapse!important;border:none!important;}table td,table th{border:1px solid #000000!important;}div.print-outer{outline:1px solid #000000;}</style>`;
   wrapper.innerHTML=printStyle+tableHTML;
   document.body.appendChild(wrapper);
   await new Promise(r=>setTimeout(r,200));
