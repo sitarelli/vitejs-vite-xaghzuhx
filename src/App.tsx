@@ -575,10 +575,17 @@ async function exportJPGPrint(turni:any,weekStart:Date,weekEnd:Date,colDates:num
     const hh=lum.toString(16).padStart(2,"0");
     return `#${hh}${hh}${hh}`;
   };
-  // Force row/cell backgrounds to white: #FFFFFF, #F1F5F9 (alt rows), #F3F4F6 (tfoot), #FEE2E2 (absent)
-  const rowBgWhitelist=new Set(["ffffff","f1f5f9","f3f4f6","fee2e2"]);
+  // Force ALL backgrounds to white except the dark header bar and column headers
+  // This covers: row alternating bg, shift badge bg (Mattina/Pomeriggio/PS/Unico/cassa/custom),
+  // footer badge circles (green/yellow/red), absent cell bg
+  const bgWhitelist=new Set([
+    "ffffff","f1f5f9","f3f4f6",           // row backgrounds
+    "fee2e2","fef3c7","dbeafe","ede9fe",   // absent + shift badges
+    "dcfce7","fef9c3","e2e8f0","f1f5f9",   // shift badges + cassa
+    "eef2ff","94a3b8","c7d2fe",            // custom edit badge
+  ]);
   tableHTML=tableHTML.replace(/background:(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3})/g,(_m,hex)=>{
-    if(rowBgWhitelist.has(hex.replace("#","").toLowerCase())) return "background:#ffffff";
+    if(bgWhitelist.has(hex.replace("#","").toLowerCase())) return "background:#ffffff";
     return `background:${hex}`;
   });
   tableHTML=tableHTML.replace(/#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?=[;'"\s)])/g,(_,hex)=>colorToGray(hex));
